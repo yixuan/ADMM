@@ -1,0 +1,12 @@
+Package: ADMM
+Type: Package
+Title: Solution to Lasso like problems using ADMM algorithm
+Version: 1.0
+Date: 2014-11-24
+Author: Yixuan Qiu
+Maintainer: Yixuan Qiu <yixuan.qiu@cos.name>
+Description: Solving Lasso like problems using the
+    Alternating Direction Method of Multipliers (ADMM) algorithm
+License: GPL (>= 2)
+Imports: Rcpp (>= 0.11.0)
+LinkingTo: Rcpp, RcppEigen
