@@ -81,14 +81,25 @@ protected:
 
 public:
     ADMMBase(int n_, int m_, int p_,
+             const VectorXd &init_x,
+             const VectorXd &init_z,
+             const VectorXd &init_y,
              double eps_abs_ = 1e-8, double eps_rel_ = 1e-8,
-             double rho_ = 1e-4) :
+             double rho_ = 1e-3) :
+        dim_main(n_), dim_aux(m_), dim_dual(p_),
+        main_x(init_x), aux_z(init_z), dual_y(init_y),
+        rho(rho_), eps_abs(eps_abs_), eps_rel(eps_rel_),
+        eps_primal(0), eps_dual(0), resid_primal(9999), resid_dual(9999)
+    {}
+    ADMMBase(int n_, int m_, int p_,
+             double eps_abs_ = 1e-8, double eps_rel_ = 1e-8,
+             double rho_ = 1e-3) :
         dim_main(n_), dim_aux(m_), dim_dual(p_),
         main_x(VectorXd::Zero(n_)),
         aux_z(VectorXd::Zero(m_)),
         dual_y(VectorXd::Zero(p_)),
         rho(rho_), eps_abs(eps_abs_), eps_rel(eps_rel_),
-        eps_primal(999), eps_dual(999), resid_primal(9999), resid_dual(9999)
+        eps_primal(0), eps_dual(0), resid_primal(9999), resid_dual(9999)
     {}
     virtual void update_x()
     {

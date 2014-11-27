@@ -1,5 +1,13 @@
 #include "ADMMBase.h"
 
+// minimize  1/2 * ||y - X * beta||^2 + lambda * ||beta||_1
+//
+// In ADMM form,
+//   minimize f(x) + g(z)
+//   s.t. x - z = 0
+//
+// f(beta) = 1/2 * ||y - X * beta||^2
+// g(z) = lambda * ||z||_1
 class ADMMLasso: public ADMMBase
 {
 private:
@@ -7,16 +15,14 @@ private:
     typedef Eigen::ArrayXd ArrayXd;
     typedef Eigen::LLT<MatrixXd> LLT;
 
-    const MatrixXd *datX;  // data matrix
-    const VectorXd *datY;  // response vector
-    double lambda;         // L1 penalty
-    
-    bool thinX;              // whether nrow(X) > ncol(X)
-    VectorXd cache_matvec;   // cache X'y
-    MatrixXd cache_matprod;  // cache X'X if thinX = true,
-                             // or XX' if thinX = false
-    ArrayXd cache_diag;      // diagonal elments of cache_matprod
-    LLT solver;              // matrix factorization
+    const MatrixXd *datX;         // data matrix
+    const double lambda;          // L1 penalty
+    const bool thinX;             // whether nrow(X) > ncol(X)
+    const VectorXd cache_matvec;  // cache X'y
+    MatrixXd cache_matprod;       // cache X'X if thinX = true,
+                                  // or XX' if thinX = false
+    ArrayXd cache_diag;           // diagonal elments of cache_matprod
+    LLT solver;                   // matrix factorization
     
     virtual void A_mult(VectorXd &x) {}  // x -> x
     virtual void At_mult(VectorXd &x) {} // x -> x
@@ -61,21 +67,22 @@ private:
     }
     
 public:
-    ADMMLasso(MatrixXd &datX_, VectorXd &datY_, double lambda_,
+    ADMMLasso(const MatrixXd &datX_, const VectorXd &datY_,
+              double lambda_,
               double eps_abs_ = 1e-8,
               double eps_rel_ = 1e-8,
-              double rho_ = 1e-4) :
+              double rho_ = 1e-3) :
         ADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
                  eps_abs_, eps_rel_, rho_),
-        datX(&datX_), datY(&datY_), lambda(lambda_ * datX_.rows()),
-        thinX(datX_.rows() > datX_.cols())
+        datX(&datX_), lambda(lambda_),
+        thinX(datX_.rows() > datX_.cols()),
+        cache_matvec(datX_.transpose() * datY_)
     {
         if(thinX)
             cache_matprod = datX_.transpose() * datX_;
         else
             cache_matprod = datX_ * datX_.transpose();
         
-        cache_matvec = datX_.transpose() * datY_;
         cache_diag = cache_matprod.diagonal();
         rho_changed_action();
     }
@@ -111,7 +118,11 @@ BEGIN_RCPP
 
     MatrixXd datX(as<MatrixXd>(x_));
     VectorXd datY(as<VectorXd>(y_));
-    double lambda = as<double>(lambda_);
+    // In glmnet, we minimize
+    //   1/(2n) * ||y - X * beta||^2 + lambda * ||beta||_1
+    // which is equivalent to minimizing
+    //   1/2 * ||y - X * beta||^2 + n * lambda * ||beta||_1
+    double lambda = as<double>(lambda_) * datX.rows();
     
     int maxit = as<int>(maxit_);
     double eps_abs = as<double>(eps_abs_);
