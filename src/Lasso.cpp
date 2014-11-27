@@ -18,7 +18,7 @@ private:
     virtual double c_norm() { return 0.0; }  // ||c||_2 = 0
     virtual void next_residual(VectorXd &res, const VectorXd &x, const VectorXd &z)
     {
-        res = x - z;
+        res.noalias() = x - z;
     }
     
     virtual void next_x(VectorXd &res)
@@ -28,7 +28,7 @@ private:
     }
     virtual void next_z(VectorXd &res)
     {
-        res = main_x + dual_y / rho;
+        res.noalias() = main_x + dual_y / rho;
         soft_threshold(res, lambda / rho);
     }
     virtual void rho_changed_action()

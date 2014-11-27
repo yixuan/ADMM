@@ -117,7 +117,7 @@ public:
         
         resid_primal = newr.norm();
         
-        dual_y = dual_y + rho * newr;
+        dual_y.noalias() += rho * newr;
     }
     
     virtual void debuginfo()
