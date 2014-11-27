@@ -4,35 +4,40 @@ class ADMMLasso: public ADMMBase
 {
 private:
     typedef Eigen::MatrixXd MatrixXd;
+    typedef Eigen::LLT<MatrixXd> LLT;
 
     const MatrixXd *datX;
     const VectorXd *datY;
     double lambda;
     
+    LLT solver;
+    
     virtual void A_mult(VectorXd &x) {}
     virtual void At_mult(VectorXd &x) {}
     virtual void B_mult(VectorXd &x) {}
     virtual double c_norm() { return 0.0; }
-    virtual void residual(VectorXd &res, const VectorXd &x, const VectorXd &z)
+    virtual void next_residual(VectorXd &res, const VectorXd &x, const VectorXd &z)
     {
         res = x - z;
     }
     
-    virtual VectorXd next_x()
+    virtual void next_x(VectorXd &res)
     {
-        MatrixXd rhs1 = (*datX).transpose() * (*datX) + rho * MatrixXd::Identity(dim_n, dim_n);
-        VectorXd rhs2 = (*datX).transpose() * (*datY) + rho * aux_z - dual_y;
-        VectorXd newx = rhs1.ldlt().solve(rhs2);
-
-        return newx;
+        VectorXd rhs = (*datX).transpose() * (*datY) + rho * aux_z - dual_y;
+        res = solver.solve(rhs);
     }
-    virtual VectorXd next_z()
+    virtual void next_z(VectorXd &res)
     {
-        VectorXd newz = main_x + dual_y / rho;
-        soft_threshold(newz, lambda / rho);
-        
-        return newz;
+        res = main_x + dual_y / rho;
+        soft_threshold(res, lambda / rho);
     }
+    virtual void rho_changed_action()
+    {
+        MatrixXd mat = (*datX).transpose() * (*datX);
+        mat.diagonal().array() = mat.diagonal().array() + rho;
+        solver.compute(mat);
+    }
+    
 public:
     ADMMLasso(MatrixXd &datX_, VectorXd &datY_, double lambda_,
               double eps_abs_ = 1e-8,
@@ -41,7 +46,9 @@ public:
         ADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
                  eps_abs_, eps_rel_, rho_),
         datX(&datX_), datY(&datY_), lambda(lambda_)
-    {}
+    {
+        rho_changed_action();
+    }
 
     static void soft_threshold(VectorXd &vec, const double &penalty)
     {
