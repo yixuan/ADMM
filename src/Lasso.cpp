@@ -6,16 +6,16 @@ private:
     typedef Eigen::MatrixXd MatrixXd;
     typedef Eigen::LLT<MatrixXd> LLT;
 
-    const MatrixXd *datX;
-    const VectorXd *datY;
-    double lambda;
+    const MatrixXd *datX;  // data matrix
+    const VectorXd *datY;  // response vector
+    double lambda;         // L1 penalty
     
-    LLT solver;
+    LLT solver;  // matrix factorization
     
-    virtual void A_mult(VectorXd &x) {}
-    virtual void At_mult(VectorXd &x) {}
-    virtual void B_mult(VectorXd &x) {}
-    virtual double c_norm() { return 0.0; }
+    virtual void A_mult(VectorXd &x) {}  // x -> x
+    virtual void At_mult(VectorXd &x) {} // x -> x
+    virtual void B_mult(VectorXd &x) {}  // x -> x
+    virtual double c_norm() { return 0.0; }  // ||c||_2 = 0
     virtual void next_residual(VectorXd &res, const VectorXd &x, const VectorXd &z)
     {
         res = x - z;
@@ -52,14 +52,15 @@ public:
 
     static void soft_threshold(VectorXd &vec, const double &penalty)
     {
+        double *ptr = vec.data();
         for(int i = 0; i < vec.size(); i++)
         {
-            if(vec[i] > penalty)
-                vec[i] -= penalty;
-            else if(vec[i] < -penalty)
-                vec[i] += penalty;
+            if(ptr[i] > penalty)
+                ptr[i] -= penalty;
+            else if(ptr[i] < -penalty)
+                ptr[i] += penalty;
             else
-                vec[i] = 0;
+                ptr[i] = 0;
         }
     }
 };
