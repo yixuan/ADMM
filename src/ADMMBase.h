@@ -9,17 +9,14 @@
 //
 // x(n, 1), z(m, 1), A(p, n), B(p, m), c(p, 1)
 //
-// In this implementation, we assume that x, z and c are of type
-// Eigen::VectorXd, and A, B are generic, since they could take
-// special structures, e.g. scalar constants.
 class ADMMBase
 {
 protected:
     typedef Eigen::VectorXd VectorXd;
 
-    int constr_p;
-    int dim_n;
-    int dim_m;
+    int dim_main;
+    int dim_aux;
+    int dim_dual;
     
     VectorXd main_x;
     VectorXd aux_z;
@@ -53,13 +50,13 @@ protected:
         B_mult(zcopy);
         double r = std::max(xcopy.norm(), zcopy.norm());
         r = std::max(r, c_norm());
-        return r * eps_rel + sqrt(double(constr_p)) * eps_abs;
+        return r * eps_rel + sqrt(double(dim_dual)) * eps_abs;
     }
     virtual double compute_eps_dual()
     {
         VectorXd ycopy = dual_y;
         At_mult(ycopy);
-        return ycopy.norm() * eps_rel + sqrt(double(dim_n)) * eps_abs;
+        return ycopy.norm() * eps_rel + sqrt(double(dim_main)) * eps_abs;
     }
     
     virtual void update_rho()
@@ -77,10 +74,10 @@ protected:
     }
 
 public:
-    ADMMBase(int p_, int n_, int m_,
+    ADMMBase(int n_, int m_, int p_,
              double eps_abs_ = 1e-8, double eps_rel_ = 1e-8,
              double rho_ = 1e-4) :
-        constr_p(p_), dim_n(n_), dim_m(m_),
+        dim_main(n_), dim_aux(m_), dim_dual(p_),
         main_x(VectorXd::Zero(n_)),
         aux_z(VectorXd::Zero(m_)),
         dual_y(VectorXd::Zero(p_)),
@@ -97,7 +94,7 @@ public:
     }
     virtual void update_z()
     {
-        VectorXd newz(dim_m);
+        VectorXd newz(dim_aux);
         next_z(newz);
         VectorXd dual = newz - aux_z;
         B_mult(dual);
@@ -107,7 +104,7 @@ public:
     }
     virtual void update_y()
     {
-        VectorXd newr(constr_p);
+        VectorXd newr(dim_dual);
         next_residual(newr, main_x, aux_z);
         resid_primal = newr.norm();
         dual_y = dual_y + rho * newr;
