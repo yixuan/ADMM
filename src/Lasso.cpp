@@ -4,13 +4,19 @@ class ADMMLasso: public ADMMBase
 {
 private:
     typedef Eigen::MatrixXd MatrixXd;
+    typedef Eigen::ArrayXd ArrayXd;
     typedef Eigen::LLT<MatrixXd> LLT;
 
     const MatrixXd *datX;  // data matrix
     const VectorXd *datY;  // response vector
     double lambda;         // L1 penalty
     
-    LLT solver;  // matrix factorization
+    bool thinX;              // whether nrow(X) > ncol(X)
+    VectorXd cache_matvec;   // cache X'y
+    MatrixXd cache_matprod;  // cache X'X if thinX = true,
+                             // or XX' if thinX = false
+    ArrayXd cache_diag;      // diagonal elments of cache_matprod
+    LLT solver;              // matrix factorization
     
     virtual void A_mult(VectorXd &x) {}  // x -> x
     virtual void At_mult(VectorXd &x) {} // x -> x
@@ -23,8 +29,25 @@ private:
     
     virtual void next_x(VectorXd &res)
     {
-        VectorXd rhs = (*datX).transpose() * (*datY) + rho * aux_z - dual_y;
-        res = solver.solve(rhs);
+        // For a thin X,
+        //   rhs = X'y + rho * aux_z - dual_y
+        //   newx = inv(X'X + rho * I) * rhs
+        //
+        // For a wide X,
+        //   inv(X'X + rho * I) = 1/rho * I -
+        //       1/rho * X' * inv(XX' + rho * I) * X
+        // so
+        //   newx = 1/rho * rhs - 1/rho * X' * inv(XX' + rho * I) * X * rhs
+        
+        VectorXd rhs = cache_matvec + rho * aux_z - dual_y;
+        if(thinX)
+        {
+            res.noalias() = solver.solve(rhs);
+        } else {
+            res = rhs;
+            res.noalias() -= (*datX).transpose() * solver.solve((*datX) * rhs);
+            res /= rho;
+        }
     }
     virtual void next_z(VectorXd &res)
     {
@@ -33,9 +56,8 @@ private:
     }
     virtual void rho_changed_action()
     {
-        MatrixXd mat = (*datX).transpose() * (*datX);
-        mat.diagonal().array() = mat.diagonal().array() + rho;
-        solver.compute(mat);
+        cache_matprod.diagonal() = cache_diag + rho;
+        solver.compute(cache_matprod);
     }
     
 public:
@@ -45,8 +67,16 @@ public:
               double rho_ = 1e-4) :
         ADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
                  eps_abs_, eps_rel_, rho_),
-        datX(&datX_), datY(&datY_), lambda(lambda_ * datX_.rows())
+        datX(&datX_), datY(&datY_), lambda(lambda_ * datX_.rows()),
+        thinX(datX_.rows() > datX_.cols())
     {
+        if(thinX)
+            cache_matprod = datX_.transpose() * datX_;
+        else
+            cache_matprod = datX_ * datX_.transpose();
+        
+        cache_matvec = datX_.transpose() * datY_;
+        cache_diag = cache_matprod.diagonal();
         rho_changed_action();
     }
 
