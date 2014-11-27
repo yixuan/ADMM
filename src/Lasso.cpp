@@ -45,7 +45,7 @@ public:
               double rho_ = 1e-4) :
         ADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
                  eps_abs_, eps_rel_, rho_),
-        datX(&datX_), datY(&datY_), lambda(lambda_)
+        datX(&datX_), datY(&datY_), lambda(lambda_ * datX_.rows())
     {
         rho_changed_action();
     }
