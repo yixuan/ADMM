@@ -39,7 +39,11 @@ protected:
     virtual void At_mult(VectorXd &x) = 0;
     virtual void B_mult(VectorXd &x) = 0;
     virtual double c_norm() = 0;
-    virtual void residual(VectorXd &res, const VectorXd &x, const VectorXd &z) = 0;
+    
+    virtual void next_residual(VectorXd &res, const VectorXd &x, const VectorXd &z) = 0;
+    virtual void next_x(VectorXd &res) = 0;
+    virtual void next_z(VectorXd &res) = 0;
+    virtual void rho_changed_action() {}
 
     virtual double compute_eps_primal()
     {
@@ -57,16 +61,20 @@ protected:
         At_mult(ycopy);
         return ycopy.norm() * eps_rel + sqrt(double(dim_n)) * eps_abs;
     }
+    
     virtual void update_rho()
     {
         if(resid_primal > 10 * resid_dual)
+        {
             rho *= 2;
+            rho_changed_action();
+        }
         else if(resid_dual > 10 * resid_primal)
+        {
             rho *= 0.5;
+            rho_changed_action();
+        }
     }
-
-    virtual VectorXd next_x() = 0;
-    virtual VectorXd next_z() = 0;
 
 public:
     ADMMBase(int p_, int n_, int m_,
@@ -85,12 +93,12 @@ public:
         eps_dual = compute_eps_dual();
         update_rho();
 
-        VectorXd newx = next_x();
-        main_x.swap(newx);
+        next_x(main_x);
     }
     virtual void update_z()
     {
-        VectorXd newz = next_z();
+        VectorXd newz(dim_m);
+        next_z(newz);
         VectorXd dual = newz - aux_z;
         B_mult(dual);
         At_mult(dual);
@@ -100,7 +108,7 @@ public:
     virtual void update_y()
     {
         VectorXd newr(constr_p);
-        residual(newr, main_x, aux_z);
+        next_residual(newr, main_x, aux_z);
         resid_primal = newr.norm();
         dual_y = dual_y + rho * newr;
     }
