@@ -2,6 +2,7 @@
 
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
+using Eigen::ArrayXd;
 using Rcpp::as;
 using Rcpp::List;
 using Rcpp::Named;
@@ -25,6 +26,26 @@ BEGIN_RCPP
     double eps_rel = as<double>(eps_rel_);
     double rho = as<double>(rho_);
     
+    /*
+    // Standardize datY
+    double meanY = datY.mean();
+    datY.array() -= meanY;
+    double scaleY = datY.norm() / sqrt(double(datY.size()));
+    datY.array() /= scaleY;
+    
+    // Standardize datX
+    ArrayXd meanX = datX.colwise().mean();
+    for(int i = 0; i < datX.cols(); i++)
+    {
+        datX.col(i).array() -= meanX[i];
+    }
+    ArrayXd scaleX = datX.colwise().norm() / sqrt(double(datX.rows()));
+    for(int i = 0; i < datX.cols(); i++)
+    {
+        datX.col(i).array() /= scaleX[i];
+    }
+    */
+    
     ADMMLasso solver(datX, datY, lambda, eps_abs, eps_rel, rho);
     int i;
     for(i = 0; i < maxit; i++)
@@ -38,10 +59,13 @@ BEGIN_RCPP
         if(solver.converged())
             break;
     }
-
-    return List::create(Named("x") = solver.get_x(),
-                        Named("z") = solver.get_z(),
-                        Named("y") = solver.get_y(),
+    
+    /*
+    ArrayXd beta(datX.cols() + 1);
+    beta.segment(1, datX.cols()) = solver.get_z().array() / scaleX * scaleY;
+    */
+    
+    return List::create(Named("coef") = solver.get_z(),
                         Named("niter") = i);
 
 END_RCPP
