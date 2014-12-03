@@ -1,0 +1,56 @@
+---
+output:
+  html_document:
+    keep_md: yes
+---
+
+### ADMM
+
+`ADMM` is an R package to solve Lasso-like problems using the ADMM algorithm.
+
+### Comparison
+
+Comparing `ADMM` with `glmnet`
+
+```{r}
+library(glmnet)
+library(ADMM)
+set.seed(123)
+n = 100
+p = 10
+x = matrix(rnorm(n * p), n, p)
+y = rnorm(n)
+
+x = scale(x) / sqrt((n - 1) / n)
+y = y - mean(y)
+y = y / sqrt(sum(y^2)) * sqrt(n)
+
+fit = glmnet(x, y, standardize = FALSE, intercept = FALSE)
+coef(fit, s = exp(-2), exact = TRUE)
+
+admm_lasso(x, y, exp(-2))
+```
+
+### Performance
+
+```{r}
+library(glmnet)
+library(ADMM)
+set.seed(123)
+n = 500
+p = 1000
+x = matrix(rnorm(n * p), n, p)
+y = rnorm(n)
+
+x = scale(x) / sqrt((n - 1) / n)
+y = y - mean(y)
+y = y / sqrt(sum(y^2)) * sqrt(n)
+
+system.time(
+    res1 <- coef(glmnet(x, y, standardize = FALSE, intercept = FALSE),
+                 s = exp(-2), exact = TRUE)
+)
+
+system.time(res2 <- admm_lasso(x, y, exp(-2)))
+
+range(as.numeric(res1)[-1] - res2$coef)
