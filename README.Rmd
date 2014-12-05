@@ -16,35 +16,51 @@ Comparing `ADMM` with `glmnet`
 library(glmnet)
 library(ADMM)
 set.seed(123)
-n = 100
-p = 10
-x = matrix(rnorm(n * p), n, p)
-y = rnorm(n)
+n <- 100
+p <- 10
+m <- 5
+b <- matrix(c(runif(m), rep(0, p - m)))
+x <- matrix(rnorm(n * p, sd = 2), n, p)
+y <- x %*% b + rnorm(n)
 
-x = scale(x) / sqrt((n - 1) / n)
-y = y - mean(y)
-y = y / sqrt(sum(y^2)) * sqrt(n)
+## non-standardized
+fit <- glmnet(x, y, standardize = FALSE, intercept = FALSE)
+out_glmnet <- coef(fit, s = exp(-2), exact = TRUE)
+out_admm <- admm_lasso(x, y, exp(-2), rho = 10)
+data.frame(glmnet = out_glmnet[-1], admm = out_admm$coef)
 
-fit = glmnet(x, y, standardize = FALSE, intercept = FALSE)
-coef(fit, s = exp(-2), exact = TRUE)
+## standardized 
+# glmnet use standardized parameter
+fit1 <- glmnet(x, y, standardize = TRUE, intercept = FALSE)
+out_glmnet1 <- coef(fit1, s = exp(-2), exact = TRUE)
+# glmnet don't use standardized parameter, standardizing data by yourself
+x0 <- scale(x) * sqrt((n - 1) / n)
+fit2 <- glmnet(x0, y, standardize = FALSE, intercept = FALSE)
+out_glmnet2 <- coef(fit2, s = exp(-2), exact = TRUE)[-1] / apply(x, 2, function(x) sd(x) * sqrt((n - 1) / n))
+out_admm1 <- admm_lasso(x0, y, exp(-2), rho = 10)$coef / apply(x, 2, function(x) sd(x) * sqrt((n - 1) / n))
 
-admm_lasso(x, y, exp(-2))
+data.frame(glmnet_std = out_glmnet1[-1], glmnet_mystd = out_glmnet2, admm_mystd = out_admm1)
+```
+
+### rho setting
+
+```{r}
+rho <- 1:100
+niter <- sapply(rho, function(i) admm_lasso(x, y, exp(-2), maxit = 3000L, rho = i)$niter)
+plot(rho, niter)
 ```
 
 ### Performance
 
 ```{r}
-library(glmnet)
-library(ADMM)
+# High dimension, small sample
 set.seed(123)
-n = 500
-p = 1000
-x = matrix(rnorm(n * p), n, p)
-y = rnorm(n)
-
-x = scale(x) / sqrt((n - 1) / n)
-y = y - mean(y)
-y = y / sqrt(sum(y^2)) * sqrt(n)
+n <- 100
+p <- 3000
+m <- 10
+b <- matrix(c(runif(m), rep(0, p - m)))
+x <- matrix(rnorm(n * p, sd = 2), n, p)
+y <- x %*% b + rnorm(n)
 
 system.time(
     res1 <- coef(glmnet(x, y, standardize = FALSE, intercept = FALSE),
@@ -52,5 +68,13 @@ system.time(
 )
 
 system.time(res2 <- admm_lasso(x, y, exp(-2)))
-
 range(as.numeric(res1)[-1] - res2$coef)
+```
+
+### rho setting
+
+```{r}
+rho <- 1:100
+niter <- sapply(rho, function(i) admm_lasso(scale(x), y, exp(-2), maxit = 3000L, rho = i)$niter)
+plot(rho, niter)
+```
