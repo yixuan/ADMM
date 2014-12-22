@@ -49,30 +49,54 @@ data.frame(glmnet = out_glmnet[-1], admm = out_admm$coef)
 ```
 
 ```r
-## standardized 
-# glmnet use standardized parameter
-fit1 <- glmnet(x, y, standardize = TRUE, intercept = FALSE)
+## standardized
+# use the "standardize" parameter provided by glmnet
+fit1 <- glmnet(x, y, standardize = TRUE, intercept = TRUE)
 out_glmnet1 <- coef(fit1, s = exp(-2), exact = TRUE)
-# glmnet don't use standardized parameter, standardizing data by yourself
-x0 <- scale(x) * sqrt((n - 1) / n)
-fit2 <- glmnet(x0, y, standardize = FALSE, intercept = FALSE)
-out_glmnet2 <- coef(fit2, s = exp(-2), exact = TRUE)[-1] / apply(x, 2, function(x) sd(x) * sqrt((n - 1) / n))
-out_admm1 <- admm_lasso(x0, y, exp(-2), rho = 10)$coef / apply(x, 2, function(x) sd(x) * sqrt((n - 1) / n))
+# standardize data by yourself
+x0 <- scale(x) / sqrt((n - 1) / n)
+y0 <- c(scale(y)) / sqrt((n - 1) / n)
+# double check
+colSums(x0^2)
+```
 
-data.frame(glmnet_std = out_glmnet1[-1], glmnet_mystd = out_glmnet2, admm_mystd = out_admm1)
+```
+##  [1] 100 100 100 100 100 100 100 100 100 100
+```
+
+```r
+sum(y0^2)
+```
+
+```
+## [1] 100
+```
+
+```r
+# scaling factor
+scalex <- apply(x, 2, function(x) sd(x) * sqrt((n - 1) / n))
+scaley <- sd(y) * sqrt((n - 1) / n)
+
+fit2 <- glmnet(x0, y0, standardize = FALSE, intercept = FALSE)
+out_glmnet2 <- coef(fit2, s = exp(-2) / scaley, exact = TRUE)[-1] * scaley / scalex
+out_admm1 <- admm_lasso(x0, y0, exp(-2) / scaley, rho = 10)$coef * scaley / scalex
+
+data.frame(glmnet_std = out_glmnet1[-1],
+           glmnet_mystd = out_glmnet2,
+           admm_mystd = out_admm1)
 ```
 
 ```
 ##     glmnet_std glmnet_mystd  admm_mystd
-## 1   0.16596899   0.16507154  0.16506980
-## 2   0.72811571   0.73710033  0.73709984
-## 3   0.37148121   0.36823063  0.36823005
-## 4   0.90687589   0.91346770  0.91346731
-## 5   0.81043176   0.80569489  0.80569474
+## 1   0.16405429   0.16405429  0.16405192
+## 2   0.73050904   0.73050904  0.73050839
+## 3   0.36518088   0.36518088  0.36517993
+## 4   0.90493998   0.90493998  0.90493958
+## 5   0.79807268   0.79807268  0.79807217
 ## 6   0.00000000   0.00000000  0.00000000
 ## 7   0.00000000   0.00000000  0.00000000
-## 8  -0.03597691  -0.03837157 -0.03837159
-## 9   0.06289898   0.07195631  0.07195676
+## 8  -0.03850441  -0.03850441 -0.03850437
+## 9   0.07174592   0.07174592  0.07174680
 ## 10  0.00000000   0.00000000  0.00000000
 ```
 
@@ -80,18 +104,16 @@ data.frame(glmnet_std = out_glmnet1[-1], glmnet_mystd = out_glmnet2, admm_mystd 
 
 
 ```r
-rho <- 1:100
+rho <- 1:200
 niter <- sapply(rho, function(i) admm_lasso(x, y, exp(-2), maxit = 3000L, rho = i)$niter)
 plot(rho, niter)
 ```
-
-![](README_files/figure-html/unnamed-chunk-2-1.png) 
 
 ### Performance
 
 
 ```r
-# High dimension, small sample
+# high dimension, small sample
 set.seed(123)
 n <- 100
 p <- 3000
@@ -108,16 +130,16 @@ system.time(
 
 ```
 ##    user  system elapsed 
-##    0.50    0.02    0.51
+##   0.227   0.002   0.230
 ```
 
 ```r
-system.time(res2 <- admm_lasso(x, y, exp(-2)))
+system.time(res2 <- admm_lasso(x, y, exp(-2), maxit = 1000))
 ```
 
 ```
 ##    user  system elapsed 
-##    0.36    0.00    0.36
+##   0.193   0.000   0.192
 ```
 
 ```r
@@ -125,16 +147,14 @@ range(as.numeric(res1)[-1] - res2$coef)
 ```
 
 ```
-## [1] -0.08215284  0.06290741
+## [1] -0.04689106  0.05545088
 ```
 
 ### rho setting
 
 
 ```r
-rho <- 1:100
-niter <- sapply(rho, function(i) admm_lasso(scale(x), y, exp(-2), maxit = 3000L, rho = i)$niter)
+rho <- 1:200
+niter <- sapply(rho, function(i) admm_lasso(x, y, exp(-2), maxit = 3000L, rho = i)$niter)
 plot(rho, niter)
 ```
-
-![](README_files/figure-html/unnamed-chunk-4-1.png) 
