@@ -8,8 +8,7 @@ using Rcpp::List;
 using Rcpp::Named;
 
 RcppExport SEXP admm_lasso(SEXP x_, SEXP y_, SEXP lambda_,
-                           SEXP maxit_,
-                           SEXP eps_abs_, SEXP eps_rel_, SEXP rho_)
+                           SEXP opts_)
 {
 BEGIN_RCPP
 
@@ -21,11 +20,12 @@ BEGIN_RCPP
     //   1/2 * ||y - X * beta||^2 + n * lambda * ||beta||_1
     double lambda = as<double>(lambda_) * datX.rows();
     
-    int maxit = as<int>(maxit_);
-    double eps_abs = as<double>(eps_abs_);
-    double eps_rel = as<double>(eps_rel_);
-    double rho = as<double>(rho_);
-    
+    List opts(opts_);
+    int maxit = as<int>(opts["maxit"]);
+    double eps_abs = as<double>(opts["eps_abs"]);
+    double eps_rel = as<double>(opts["eps_rel"]);
+    double rho = as<double>(opts["rho"]);
+
     /*
     // Standardize datY
     double meanY = datY.mean();
