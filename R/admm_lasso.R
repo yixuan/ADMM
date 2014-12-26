@@ -11,5 +11,6 @@ admm_lasso = function(x, y, lambda = 1.0,
     opts_admm[names(opts)] = opts
     
     .Call("admm_lasso", as.matrix(x), as.numeric(y), as.numeric(lambda),
+          as.logical(standardize), as.logical(intercept),
           as.list(opts_admm), PACKAGE = "ADMM")
 }
