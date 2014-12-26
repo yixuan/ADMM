@@ -30,7 +30,7 @@ y <- x %*% b + rnorm(n)
 ## non-standardized
 fit <- glmnet(x, y, standardize = FALSE, intercept = FALSE)
 out_glmnet <- coef(fit, s = exp(-2), exact = TRUE)
-out_admm <- admm_lasso(x, y, exp(-2), rho = 10)
+out_admm <- admm_lasso(x, y, exp(-2), opts = list(rho = 10))
 data.frame(glmnet = out_glmnet[-1], admm = out_admm$coef)
 ```
 
@@ -79,7 +79,8 @@ scaley <- sd(y) * sqrt((n - 1) / n)
 
 fit2 <- glmnet(x0, y0, standardize = FALSE, intercept = FALSE)
 out_glmnet2 <- coef(fit2, s = exp(-2) / scaley, exact = TRUE)[-1] * scaley / scalex
-out_admm1 <- admm_lasso(x0, y0, exp(-2) / scaley, rho = 10)$coef * scaley / scalex
+out_admm1 <- admm_lasso(x0, y0, exp(-2) / scaley,
+                        opts = list(rho = 10))$coef * scaley / scalex
 
 data.frame(glmnet_std = out_glmnet1[-1],
            glmnet_mystd = out_glmnet2,
@@ -105,7 +106,9 @@ data.frame(glmnet_std = out_glmnet1[-1],
 
 ```r
 rho <- 1:200
-niter <- sapply(rho, function(i) admm_lasso(x, y, exp(-2), maxit = 3000L, rho = i)$niter)
+niter <- sapply(rho, function(i) admm_lasso(x, y, exp(-2),
+                                            opts = list(maxit = 3000L,
+                                                        rho = i))$niter)
 plot(rho, niter)
 ```
 
@@ -130,16 +133,16 @@ system.time(
 
 ```
 ##    user  system elapsed 
-##   0.227   0.002   0.230
+##   0.216   0.001   0.217
 ```
 
 ```r
-system.time(res2 <- admm_lasso(x, y, exp(-2), maxit = 1000))
+system.time(res2 <- admm_lasso(x, y, exp(-2), opts = list(maxit = 1000)))
 ```
 
 ```
 ##    user  system elapsed 
-##   0.193   0.000   0.192
+##   0.189   0.000   0.189
 ```
 
 ```r
@@ -155,6 +158,8 @@ range(as.numeric(res1)[-1] - res2$coef)
 
 ```r
 rho <- 1:200
-niter <- sapply(rho, function(i) admm_lasso(x, y, exp(-2), maxit = 3000L, rho = i)$niter)
+niter <- sapply(rho, function(i) admm_lasso(x, y, exp(-2),
+                                            opts = list(maxit = 3000L,
+                                                        rho = i))$niter)
 plot(rho, niter)
 ```
