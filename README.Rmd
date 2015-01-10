@@ -20,37 +20,32 @@ n <- 100
 p <- 10
 m <- 5
 b <- matrix(c(runif(m), rep(0, p - m)))
-x <- matrix(rnorm(n * p, sd = 2), n, p)
-y <- x %*% b + rnorm(n)
+x <- matrix(rnorm(n * p, mean = 1.2, sd = 2), n, p)
+y <- 5 + x %*% b + rnorm(n)
 
-## non-standardized
-fit <- glmnet(x, y, standardize = FALSE, intercept = FALSE)
+## standardize = TRUE, intercept = TRUE
+fit <- glmnet(x, y)
 out_glmnet <- coef(fit, s = exp(-2), exact = TRUE)
-out_admm <- admm_lasso(x, y, exp(-2), opts = list(rho = 10))
-data.frame(glmnet = out_glmnet[-1], admm = out_admm$coef)
+out_admm <- admm_lasso(x, y, exp(-2))
+data.frame(glmnet = as.numeric(out_glmnet), admm = out_admm$coef)
 
-## standardized
-# use the "standardize" parameter provided by glmnet
-fit1 <- glmnet(x, y, standardize = TRUE, intercept = TRUE)
-out_glmnet1 <- coef(fit1, s = exp(-2), exact = TRUE)
-# standardize data by yourself
-x0 <- scale(x) / sqrt((n - 1) / n)
-y0 <- c(scale(y)) / sqrt((n - 1) / n)
-# double check
-colSums(x0^2)
-sum(y0^2)
-# scaling factor
-scalex <- apply(x, 2, function(x) sd(x) * sqrt((n - 1) / n))
-scaley <- sd(y) * sqrt((n - 1) / n)
+## standardize = TRUE, intercept = FALSE
+fit2 <- glmnet(x, y, intercept = FALSE)
+out_glmnet2 <- coef(fit2, s = exp(-2), exact = TRUE)
+out_admm2 <- admm_lasso(x, y, exp(-2), intercept = FALSE)
+data.frame(glmnet = as.numeric(out_glmnet2), admm = out_admm2$coef)
 
-fit2 <- glmnet(x0, y0, standardize = FALSE, intercept = FALSE)
-out_glmnet2 <- coef(fit2, s = exp(-2) / scaley, exact = TRUE)[-1] * scaley / scalex
-out_admm1 <- admm_lasso(x0, y0, exp(-2) / scaley,
-                        opts = list(rho = 10))$coef * scaley / scalex
+## standardize = FALSE, intercept = TRUE
+fit3 <- glmnet(x, y, standardize = FALSE)
+out_glmnet3 <- coef(fit3, s = exp(-2), exact = TRUE)
+out_admm3 <- admm_lasso(x, y, exp(-2), standardize = FALSE)
+data.frame(glmnet = as.numeric(out_glmnet3), admm = out_admm3$coef)
 
-data.frame(glmnet_std = out_glmnet1[-1],
-           glmnet_mystd = out_glmnet2,
-           admm_mystd = out_admm1)
+## standardize = FALSE, intercept = FALSE
+fit4 <- glmnet(x, y, standardize = FALSE, intercept = FALSE)
+out_glmnet4 <- coef(fit4, s = exp(-2), exact = TRUE)
+out_admm4 <- admm_lasso(x, y, exp(-2), standardize = FALSE, intercept = FALSE)
+data.frame(glmnet = as.numeric(out_glmnet4), admm = out_admm4$coef)
 ```
 
 ### rho setting
@@ -76,12 +71,11 @@ x <- matrix(rnorm(n * p, sd = 2), n, p)
 y <- x %*% b + rnorm(n)
 
 system.time(
-    res1 <- coef(glmnet(x, y, standardize = FALSE, intercept = FALSE),
-                 s = exp(-2), exact = TRUE)
+    res1 <- coef(glmnet(x, y), s = exp(-2), exact = TRUE)
 )
 
 system.time(res2 <- admm_lasso(x, y, exp(-2), opts = list(maxit = 1000)))
-range(as.numeric(res1)[-1] - res2$coef)
+range(as.numeric(res1) - res2$coef)
 ```
 
 ### rho setting
