@@ -8,5 +8,6 @@ Maintainer: Yixuan Qiu <yixuan.qiu@cos.name>
 Description: Solving Lasso like problems using the
     Alternating Direction Method of Multipliers (ADMM) algorithm
 License: GPL (>= 2)
+Depends: methods
 Imports: Rcpp (>= 0.11.0)
 LinkingTo: Rcpp, RcppEigen
