@@ -13,11 +13,12 @@ class ADMMBase
 {
 protected:
     typedef Eigen::VectorXd VectorXd;
+    typedef Eigen::Ref<const VectorXd> Ref;
 
     int dim_main;  // dimension of x
     int dim_aux;   // dimension of z
     int dim_dual;  // dimension of Ax + Bz - c
-    
+
     VectorXd main_x;  // parameters to be optimized
     VectorXd aux_z;   // auxiliary parameters
     VectorXd dual_y;  // Lagrangian multiplier
@@ -36,7 +37,7 @@ protected:
     virtual void At_mult(VectorXd &x) = 0;  // (inplace) operation x -> A'x
     virtual void B_mult(VectorXd &x) = 0;   // (inplace) operation x -> Bx
     virtual double c_norm() = 0;            // L2 norm of c
-    
+
     // res = Ax + Bz - c
     virtual void next_residual(VectorXd &res, const VectorXd &x, const VectorXd &z) = 0;
     // res = x in next iteration
@@ -81,26 +82,50 @@ protected:
 
 public:
     ADMMBase(int n_, int m_, int p_,
-             const VectorXd &init_x,
-             const VectorXd &init_z,
-             const VectorXd &init_y,
-             double eps_abs_ = 1e-8, double eps_rel_ = 1e-8,
-             double rho_ = 1e-3) :
+             double eps_abs_ = 1e-6, double eps_rel_ = 1e-6) :
         dim_main(n_), dim_aux(m_), dim_dual(p_),
-        main_x(init_x), aux_z(init_z), dual_y(init_y),
-        rho(rho_), eps_abs(eps_abs_), eps_rel(eps_rel_),
-        eps_primal(0), eps_dual(0), resid_primal(9999), resid_dual(9999)
+        main_x(n_), aux_z(m_), dual_y(p_),  // allocate space but do not set values
+        eps_abs(eps_abs_), eps_rel(eps_rel_)
     {}
-    ADMMBase(int n_, int m_, int p_,
-             double eps_abs_ = 1e-8, double eps_rel_ = 1e-8,
-             double rho_ = 1e-3) :
-        dim_main(n_), dim_aux(m_), dim_dual(p_),
-        main_x(VectorXd::Zero(n_)),
-        aux_z(VectorXd::Zero(m_)),
-        dual_y(VectorXd::Zero(p_)),
-        rho(rho_), eps_abs(eps_abs_), eps_rel(eps_rel_),
-        eps_primal(0), eps_dual(0), resid_primal(9999), resid_dual(9999)
-    {}
+    
+    // init() needs to be called every time we want to solve
+    // for a new lambda
+    virtual void init()
+    {
+        main_x.setZero();
+        aux_z.setZero();
+        dual_y.setZero();
+        rho = 1e-3;
+        eps_primal = 0.0;
+        eps_dual = 0.0;
+        resid_primal = 9999;
+        resid_dual = 9999;
+    }
+    // provide rho
+    virtual void init(double rho_)
+    {
+        main_x.setZero();
+        aux_z.setZero();
+        dual_y.setZero();
+        rho = rho_;
+        eps_primal = 0.0;
+        eps_dual = 0.0;
+        resid_primal = 9999;
+        resid_dual = 9999;
+    }
+    // provide initial values
+    virtual void init(const Ref &init_x, double rho_)
+    {
+        main_x = init_x;
+        aux_z = init_x;
+        dual_y.setZero();
+        rho = rho_;
+        eps_primal = 0.0;
+        eps_dual = 0.0;
+        resid_primal = 9999;
+        resid_dual = 9999;
+    }
+
     virtual void update_x()
     {
         eps_primal = compute_eps_primal();
@@ -113,24 +138,24 @@ public:
     {
         VectorXd newz(dim_aux);
         next_z(newz);
-        
+
         VectorXd dual = newz - aux_z;
         B_mult(dual);
         At_mult(dual);
         resid_dual = rho * dual.norm();
-        
+
         aux_z.swap(newz);
     }
     virtual void update_y()
     {
         VectorXd newr(dim_dual);
         next_residual(newr, main_x, aux_z);
-        
+
         resid_primal = newr.norm();
-        
+
         dual_y.noalias() += rho * newr;
     }
-    
+
     virtual void debuginfo()
     {
         Rcpp::Rcout << "eps_primal = " << eps_primal << std::endl;
@@ -144,6 +169,21 @@ public:
     {
         return (resid_primal < eps_primal) &&
                (resid_dual < eps_dual);
+    }
+
+    virtual int solve(int maxit)
+    {
+        int i;
+        for(i = 0; i < maxit; i++)
+        {
+            update_x();
+            update_z();
+            update_y();
+            // debuginfo();
+            if(converged())
+                break;
+        }
+        return i;
     }
 
     virtual VectorXd get_x() { return main_x; }
