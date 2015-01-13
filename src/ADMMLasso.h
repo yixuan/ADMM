@@ -21,10 +21,11 @@ private:
     const MatrixXd *datX;         // data matrix
     const double lambda;          // L1 penalty
     const bool thinX;             // whether nrow(X) > ncol(X)
-    const VectorXd cache_matvec;  // cache X'y
-    MatrixXd cache_matprod;       // cache X'X if thinX = true,
+
+    const VectorXd cache_XY;      // cache X'y
+    MatrixXd cache_XX;            // cache X'X if thinX = true,
                                   // or XX' if thinX = false
-    ArrayXd cache_diag;           // diagonal elments of cache_matprod
+    ArrayXd cache_XXdiag;         // diagonal elments of cache_XX
     LLT solver;                   // matrix factorization
     
     virtual void A_mult(VectorXd &x) {}  // x -> x
@@ -48,7 +49,7 @@ private:
         // so
         //   newx = 1/rho * rhs - 1/rho * X' * inv(XX' + rho * I) * X * rhs
         
-        VectorXd rhs = cache_matvec + rho * aux_z - dual_y;
+        VectorXd rhs = cache_XY + rho * aux_z - dual_y;
         if(thinX)
         {
             res.noalias() = solver.solve(rhs);
@@ -65,28 +66,27 @@ private:
     }
     virtual void rho_changed_action()
     {
-        cache_matprod.diagonal() = cache_diag + rho;
-        solver.compute(cache_matprod);
+        cache_XX.diagonal() = cache_XXdiag + rho;
+        solver.compute(cache_XX);
     }
     
 public:
     ADMMLasso(const MatrixXd &datX_, const VectorXd &datY_,
               double lambda_,
-              double eps_abs_ = 1e-8,
-              double eps_rel_ = 1e-8,
-              double rho_ = 1e-3) :
+              double eps_abs_ = 1e-6,
+              double eps_rel_ = 1e-6) :
         ADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
-                 eps_abs_, eps_rel_, rho_),
+                 eps_abs_, eps_rel_),
         datX(&datX_), lambda(lambda_),
         thinX(datX_.rows() > datX_.cols()),
-        cache_matvec(datX_.transpose() * datY_)
+        cache_XY(datX_.transpose() * datY_)
     {
         if(thinX)
-            cache_matprod = datX_.transpose() * datX_;
+            cache_XX = datX_.transpose() * datX_;
         else
-            cache_matprod = datX_ * datX_.transpose();
+            cache_XX = datX_ * datX_.transpose();
         
-        cache_diag = cache_matprod.diagonal();
+        cache_XXdiag = cache_XX.diagonal();
         rho_changed_action();
     }
 
