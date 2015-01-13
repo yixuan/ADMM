@@ -116,19 +116,9 @@ BEGIN_RCPP
             break;
     }
     
-    ADMMLasso solver(datX, datY, lambda / scaleY, eps_abs, eps_rel, rho);
-    int i;
-    for(i = 0; i < maxit; i++)
-    {
-        solver.update_x();
-        solver.update_z();
-        solver.update_y();
-        
-        // solver.debuginfo();
-        
-        if(solver.converged())
-            break;
-    }
+    ADMMLasso solver(datX, datY, lambda / scaleY, eps_abs, eps_rel);
+    solver.init(rho);
+    int niter = solver.solve(maxit);
     
     ArrayXd beta(p + 1);
     MapArray coef(&beta[1], p);
@@ -157,7 +147,7 @@ BEGIN_RCPP
     }
     
     return List::create(Named("coef") = beta,
-                        Named("niter") = i);
+                        Named("niter") = niter);
 
 END_RCPP
 }
