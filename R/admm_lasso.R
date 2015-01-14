@@ -6,7 +6,7 @@ admm_lasso = function(x, y, lambda = 1.0,
     opts_admm = list(maxit = 500L,
                      eps_abs = 1e-6,
                      eps_rel = 1e-6,
-                     rho = 10 * lambda * nrow(x))
+                     rho_ratio = 10)
     # update from opts
     opts_admm[names(opts)] = opts
     

@@ -36,7 +36,7 @@ BEGIN_RCPP
     int maxit = as<int>(opts["maxit"]);
     double eps_abs = as<double>(opts["eps_abs"]);
     double eps_rel = as<double>(opts["eps_rel"]);
-    NumericVector rho = opts["rho"];
+    double rho_ratio = as<double>(opts["rho_ratio"]);
 
     bool standardize = as<bool>(standardize_);
     bool intercept = as<bool>(intercept_);
@@ -52,7 +52,7 @@ BEGIN_RCPP
     {
         ilambda = lambda[i] * n / datstd.get_scaleY();
         if(i == 0)
-            solver.init(ilambda, 10 * ilambda);
+            solver.init(ilambda, rho_ratio * ilambda);
         else
             solver.init_warm(ilambda);
 
