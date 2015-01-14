@@ -145,7 +145,7 @@ public:
             if(converged())
                 break;
         }
-        return i;
+        return i + 1;
     }
 
     virtual VectorXd get_x() { return main_x; }
