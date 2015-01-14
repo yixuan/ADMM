@@ -3,9 +3,9 @@
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using Eigen::ArrayXd;
-using Eigen::DenseBase;
 using Rcpp::as;
 using Rcpp::List;
+using Rcpp::NumericVector;
 using Rcpp::Named;
 
 typedef Eigen::Map<MatrixXd> MapMat;
@@ -40,8 +40,8 @@ BEGIN_RCPP
     DataStd datstd(n, p, standardize, intercept);
     datstd.standardize(datX, datY);
     
-    ADMMLasso solver(datX, datY, lambda / datstd.get_scaleY(), eps_abs, eps_rel);
-    solver.init(rho);
+    ADMMLasso solver(datX, datY, eps_abs, eps_rel);
+    solver.init(lambda / datstd.get_scaleY(), rho);
     int niter = solver.solve(maxit);
     
     ArrayXd beta(p + 1);

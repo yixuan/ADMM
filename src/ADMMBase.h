@@ -87,44 +87,6 @@ public:
         main_x(n_), aux_z(m_), dual_y(p_),  // allocate space but do not set values
         eps_abs(eps_abs_), eps_rel(eps_rel_)
     {}
-    
-    // init() needs to be called every time we want to solve
-    // for a new lambda
-    virtual void init()
-    {
-        main_x.setZero();
-        aux_z.setZero();
-        dual_y.setZero();
-        rho = 1e-3;
-        eps_primal = 0.0;
-        eps_dual = 0.0;
-        resid_primal = 9999;
-        resid_dual = 9999;
-    }
-    // provide rho
-    virtual void init(double rho_)
-    {
-        main_x.setZero();
-        aux_z.setZero();
-        dual_y.setZero();
-        rho = rho_;
-        eps_primal = 0.0;
-        eps_dual = 0.0;
-        resid_primal = 9999;
-        resid_dual = 9999;
-    }
-    // provide initial values
-    virtual void init(const Ref &init_x, double rho_)
-    {
-        main_x = init_x;
-        aux_z = init_x;
-        dual_y.setZero();
-        rho = rho_;
-        eps_primal = 0.0;
-        eps_dual = 0.0;
-        resid_primal = 9999;
-        resid_dual = 9999;
-    }
 
     virtual void update_x()
     {

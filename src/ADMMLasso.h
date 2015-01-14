@@ -19,7 +19,7 @@ private:
     typedef Eigen::LLT<MatrixXd> LLT;
 
     const MatrixXd *datX;         // data matrix
-    const double lambda;          // L1 penalty
+    double lambda;                // L1 penalty
     const bool thinX;             // whether nrow(X) > ncol(X)
 
     const VectorXd cache_XY;      // cache X'y
@@ -72,13 +72,11 @@ private:
     
 public:
     ADMMLasso(const MatrixXd &datX_, const VectorXd &datY_,
-              double lambda_,
               double eps_abs_ = 1e-6,
               double eps_rel_ = 1e-6) :
         ADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
                  eps_abs_, eps_rel_),
-        datX(&datX_), lambda(lambda_),
-        thinX(datX_.rows() > datX_.cols()),
+        datX(&datX_), thinX(datX_.rows() > datX_.cols()),
         cache_XY(datX_.transpose() * datY_)
     {
         if(thinX)
@@ -88,6 +86,34 @@ public:
         
         cache_XXdiag = cache_XX.diagonal();
         rho_changed_action();
+    }
+
+    // init() needs to be called every time we want to solve
+    // for a new lambda
+    virtual void init(double lambda_, double rho_)
+    {
+        main_x.setZero();
+        aux_z.setZero();
+        dual_y.setZero();
+        lambda = lambda_;
+        rho = rho_;
+        eps_primal = 0.0;
+        eps_dual = 0.0;
+        resid_primal = 9999;
+        resid_dual = 9999;
+    }
+    // provide initial values
+    virtual void init(double lambda_, double rho_, const Ref &init_x)
+    {
+        main_x = init_x;
+        aux_z = init_x;
+        dual_y.setZero();
+        lambda = lambda_;
+        rho = rho_;
+        eps_primal = 0.0;
+        eps_dual = 0.0;
+        resid_primal = 9999;
+        resid_dual = 9999;
     }
 
     static void soft_threshold(VectorXd &vec, const double &penalty)
