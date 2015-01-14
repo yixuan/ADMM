@@ -3,8 +3,10 @@
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using Eigen::ArrayXd;
+using Eigen::ArrayXXd;
 using Rcpp::as;
 using Rcpp::List;
+using Rcpp::IntegerVector;
 using Rcpp::NumericVector;
 using Rcpp::Named;
 
@@ -27,13 +29,14 @@ BEGIN_RCPP
     //   1/2 * ||y - X * beta||^2 + n * lambda * ||beta||_1
     int n = datX.rows();
     int p = datX.cols();
-    double lambda = as<double>(lambda_) * n;
+    NumericVector lambda(lambda_);
+    int nlambda = lambda.length();
     
     List opts(opts_);
     int maxit = as<int>(opts["maxit"]);
     double eps_abs = as<double>(opts["eps_abs"]);
     double eps_rel = as<double>(opts["eps_rel"]);
-    double rho = as<double>(opts["rho"]);
+    NumericVector rho = opts["rho"];
 
     bool standardize = as<bool>(standardize_);
     bool intercept = as<bool>(intercept_);
@@ -41,13 +44,23 @@ BEGIN_RCPP
     datstd.standardize(datX, datY);
     
     ADMMLasso solver(datX, datY, eps_abs, eps_rel);
-    solver.init(lambda / datstd.get_scaleY(), rho);
-    int niter = solver.solve(maxit);
-    
-    ArrayXd beta(p + 1);
-    beta.segment(1, p) = solver.get_z();
-    datstd.recover(beta[0], beta.segment(1, p));
-    
+    ArrayXXd beta(p + 1, nlambda);
+    IntegerVector niter(nlambda);
+
+    double ilambda = 0.0;
+    for(int i = 0; i < nlambda; i++)
+    {
+        ilambda = lambda[i] * n / datstd.get_scaleY();
+        if(i == 0)
+            solver.init(ilambda, 10 * ilambda);
+        else
+            solver.init_warm(ilambda);
+
+        niter[i] = solver.solve(maxit);
+        beta.col(i).segment(1, p) = solver.get_z();
+        datstd.recover(beta(0, i), beta.col(i).segment(1, p));
+    }   
+
     return List::create(Named("coef") = beta,
                         Named("niter") = niter);
 

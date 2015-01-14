@@ -85,11 +85,9 @@ public:
             cache_XX = datX_ * datX_.transpose();
         
         cache_XXdiag = cache_XX.diagonal();
-        rho_changed_action();
     }
 
-    // init() needs to be called every time we want to solve
-    // for a new lambda
+    // init() is a cold start for the first lambda
     virtual void init(double lambda_, double rho_)
     {
         main_x.setZero();
@@ -101,15 +99,14 @@ public:
         eps_dual = 0.0;
         resid_primal = 9999;
         resid_dual = 9999;
+
+        rho_changed_action();
     }
-    // provide initial values
-    virtual void init(double lambda_, double rho_, const Ref &init_x)
+    // when computing for the next lambda, we can use the
+    // current main_x, aux_z, dual_y and rho as initial values
+    virtual void init_warm(double lambda_)
     {
-        main_x = init_x;
-        aux_z = init_x;
-        dual_y.setZero();
         lambda = lambda_;
-        rho = rho_;
         eps_primal = 0.0;
         eps_dual = 0.0;
         resid_primal = 9999;
