@@ -15,6 +15,7 @@ typedef Eigen::Map<VectorXd> MapVec;
 typedef Eigen::Map<ArrayXd>  MapArray;
 
 RcppExport SEXP admm_lasso(SEXP x_, SEXP y_, SEXP lambda_,
+                           SEXP nlambda_, SEXP lmin_ratio_,
                            SEXP standardize_, SEXP intercept_,
                            SEXP opts_)
 {
@@ -29,8 +30,8 @@ BEGIN_RCPP
     //   1/2 * ||y - X * beta||^2 + n * lambda * ||beta||_1
     int n = datX.rows();
     int p = datX.cols();
-    NumericVector lambda(lambda_);
-    int nlambda = lambda.length();
+    ArrayXd lambda(as<ArrayXd>(lambda_));
+    int nlambda = lambda.size();
     
     List opts(opts_);
     int maxit = as<int>(opts["maxit"]);
@@ -44,10 +45,19 @@ BEGIN_RCPP
     datstd.standardize(datX, datY);
     
     ADMMLasso solver(datX, datY, eps_abs, eps_rel);
+    if(nlambda < 1)
+    {
+        double lmax = solver.lambda_max() / n * datstd.get_scaleY();
+        double lmin = as<double>(lmin_ratio_) * lmax;
+        lambda.setLinSpaced(as<int>(nlambda_), log(lmax), log(lmin));
+        lambda = lambda.exp();
+        nlambda = lambda.size();
+    }
+
     ArrayXXd beta(p + 1, nlambda);
     IntegerVector niter(nlambda);
-
     double ilambda = 0.0;
+
     for(int i = 0; i < nlambda; i++)
     {
         ilambda = lambda[i] * n / datstd.get_scaleY();
@@ -59,10 +69,11 @@ BEGIN_RCPP
         niter[i] = solver.solve(maxit);
         beta.col(i).segment(1, p) = solver.get_z();
         datstd.recover(beta(0, i), beta.col(i).segment(1, p));
-    }   
+    }
 
-    return List::create(Named("coef") = beta,
-                        Named("niter") = niter);
+    return List::create(Named("lambda") = lambda,
+                        Named("coef") = beta,
+                        Named("niter") = niter, lambda);
 
 END_RCPP
 }

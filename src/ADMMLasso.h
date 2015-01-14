@@ -87,6 +87,8 @@ public:
         cache_XXdiag = cache_XX.diagonal();
     }
 
+    virtual double lambda_max() { return cache_XY.array().abs().maxCoeff(); }
+
     // init() is a cold start for the first lambda
     virtual void init(double lambda_, double rho_)
     {
