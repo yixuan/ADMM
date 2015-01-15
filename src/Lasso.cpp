@@ -72,7 +72,7 @@ BEGIN_RCPP
     }
 
     return List::create(Named("lambda") = lambda,
-                        Named("coef") = beta,
+                        Named("beta") = beta,
                         Named("niter") = niter);
 
 END_RCPP

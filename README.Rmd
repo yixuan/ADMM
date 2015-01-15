@@ -27,40 +27,47 @@ y <- 5 + x %*% b + rnorm(n)
 fit <- glmnet(x, y)
 out_glmnet <- coef(fit, s = exp(-2), exact = TRUE)
 out_admm <- admm_lasso(x, y, exp(-2))
-data.frame(glmnet = as.numeric(out_glmnet), admm = out_admm$coef)
+data.frame(glmnet = as.numeric(out_glmnet), admm = out_admm$beta)
 
 ## standardize = TRUE, intercept = FALSE
 fit2 <- glmnet(x, y, intercept = FALSE)
 out_glmnet2 <- coef(fit2, s = exp(-2), exact = TRUE)
 out_admm2 <- admm_lasso(x, y, exp(-2), intercept = FALSE)
-data.frame(glmnet = as.numeric(out_glmnet2), admm = out_admm2$coef)
+data.frame(glmnet = as.numeric(out_glmnet2), admm = out_admm2$beta)
 
 ## standardize = FALSE, intercept = TRUE
 fit3 <- glmnet(x, y, standardize = FALSE)
 out_glmnet3 <- coef(fit3, s = exp(-2), exact = TRUE)
 out_admm3 <- admm_lasso(x, y, exp(-2), standardize = FALSE)
-data.frame(glmnet = as.numeric(out_glmnet3), admm = out_admm3$coef)
+data.frame(glmnet = as.numeric(out_glmnet3), admm = out_admm3$beta)
 
 ## standardize = FALSE, intercept = FALSE
 fit4 <- glmnet(x, y, standardize = FALSE, intercept = FALSE)
 out_glmnet4 <- coef(fit4, s = exp(-2), exact = TRUE)
 out_admm4 <- admm_lasso(x, y, exp(-2), standardize = FALSE, intercept = FALSE)
-data.frame(glmnet = as.numeric(out_glmnet4), admm = out_admm4$coef)
+data.frame(glmnet = as.numeric(out_glmnet4), admm = out_admm4$beta)
 ```
 
 ### rho setting
 
 ```{r eval=FALSE}
 rho <- 1:200
-niter <- sapply(rho, function(i) admm_lasso(x, y, exp(-2),
-                                            opts = list(maxit = 3000L,
-                                                        rho = i))$niter)
+lambda <- exp(-2)
+rho_ratio <- rho / n / lambda
+niter <- sapply(rho,
+    function(i) admm_lasso(x, y, lambda, opts = list(maxit = 3000L,
+                                                     rho_ratio = i))$niter
+)
 plot(rho, niter)
 ```
 
 ### Performance
 
 ```{r}
+# compute the full solution path, with the data above
+system.time(res1 <- glmnet(x, y))
+system.time(res2 <- admm_lasso(x, y))
+
 # high dimension, small sample
 set.seed(123)
 n <- 100
@@ -75,15 +82,18 @@ system.time(
 )
 
 system.time(res2 <- admm_lasso(x, y, exp(-2), opts = list(maxit = 1000)))
-range(as.numeric(res1) - res2$coef)
+range(as.numeric(res1) - res2$beta)
 ```
 
 ### rho setting
 
 ```{r eval=FALSE}
 rho <- 1:200
-niter <- sapply(rho, function(i) admm_lasso(x, y, exp(-2),
-                                            opts = list(maxit = 3000L,
-                                                        rho = i))$niter)
+lambda <- exp(-2)
+rho_ratio <- rho / n / lambda
+niter <- sapply(rho,
+    function(i) admm_lasso(x, y, lambda, opts = list(maxit = 3000L,
+                                                     rho_ratio = i))$niter
+)
 plot(rho, niter)
 ```
