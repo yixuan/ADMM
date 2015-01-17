@@ -28,13 +28,13 @@ private:
     ArrayXd cache_XXdiag;         // diagonal elments of cache_XX
     LLT solver;                   // matrix factorization
     
-    virtual void A_mult(VectorXd &x) {}  // x -> x
-    virtual void At_mult(VectorXd &x) {} // x -> x
-    virtual void B_mult(VectorXd &x) {}  // x -> x
-    virtual double c_norm() { return 0.0; }  // ||c||_2 = 0
-    virtual void next_residual(VectorXd &res, const VectorXd &x, const VectorXd &z)
+    virtual void A_mult(VectorXd &x) {}                     // x -> x
+    virtual void At_mult(VectorXd &x) {}                    // x -> x
+    virtual void B_mult(VectorXd &x) { x.noalias() = -x; }  // x -> x
+    virtual double c_norm() { return 0.0; }                 // ||c||_2 = 0
+    virtual void next_residual(VectorXd &res)
     {
-        res.noalias() = x - z;
+        res.noalias() = main_x - aux_z;
     }
     
     virtual void next_x(VectorXd &res)

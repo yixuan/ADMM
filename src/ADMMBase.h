@@ -39,7 +39,7 @@ protected:
     virtual double c_norm() = 0;            // L2 norm of c
 
     // res = Ax + Bz - c
-    virtual void next_residual(VectorXd &res, const VectorXd &x, const VectorXd &z) = 0;
+    virtual void next_residual(VectorXd &res) = 0;
     // res = x in next iteration
     virtual void next_x(VectorXd &res) = 0;
     // res = z in next iteration
@@ -111,7 +111,7 @@ public:
     virtual void update_y()
     {
         VectorXd newr(dim_dual);
-        next_residual(newr, main_x, aux_z);
+        next_residual(newr);
 
         resid_primal = newr.norm();
 
