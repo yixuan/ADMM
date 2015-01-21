@@ -5,7 +5,7 @@ admm_lasso = function(x, y, lambda = NULL,
                       opts = list())
 {
     # default parameters
-    opts_admm = list(maxit = 500L,
+    opts_admm = list(maxit = 10000L,
                      eps_abs = 1e-6,
                      eps_rel = 1e-6,
                      rho_ratio = 10)
