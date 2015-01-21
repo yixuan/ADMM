@@ -15,18 +15,18 @@ class ADMMLasso: public ADMMBase
 {
 private:
     typedef Eigen::MatrixXd MatrixXd;
+    typedef Eigen::VectorXd VectorXd;
     typedef Eigen::ArrayXd ArrayXd;
-    typedef Eigen::LLT<MatrixXd> LLT;
+    typedef Eigen::SelfAdjointEigenSolver<MatrixXd> EigenSolver;
 
     const MatrixXd *datX;         // data matrix
     double lambda;                // L1 penalty
     const bool thinX;             // whether nrow(X) > ncol(X)
 
-    const VectorXd cache_XY;      // cache X'y
-    MatrixXd cache_XX;            // cache X'X if thinX = true,
-                                  // or XX' if thinX = false
-    ArrayXd cache_XXdiag;         // diagonal elments of cache_XX
-    LLT solver;                   // matrix factorization
+    const VectorXd XY;            // X'y
+    ArrayXd evals;                // eigenvalues of X'X (if thinX = true) or XX' (if thinX = false)
+    MatrixXd evecs;               // eigenvectors of X'X (if thinX = true) or XX' (if thinX = false)
+    EigenSolver solver;           // factorize X'X or XX'
     
     virtual void A_mult(VectorXd &x) {}                     // x -> x
     virtual void At_mult(VectorXd &x) {}                    // x -> x
@@ -42,20 +42,31 @@ private:
         // For a thin X,
         //   rhs = X'y + rho * aux_z - dual_y
         //   newx = inv(X'X + rho * I) * rhs
+        // Let X'X = GDG',
+        //   inv(X'X + rho * I) = G * inv(D + rho * I) * G'
+        //   newx = G * inv(D + rho * I) * G' * rhs
         //
         // For a wide X,
         //   inv(X'X + rho * I) = 1/rho * I -
         //       1/rho * X' * inv(XX' + rho * I) * X
         // so
         //   newx = 1/rho * rhs - 1/rho * X' * inv(XX' + rho * I) * X * rhs
+        // Let XX' = GDG',
+        //   inv(XX' + rho * I) = G * inv(D + rho * I) * G'
+        //   newx = 1/rho * rhs - 1/rho * X'G * inv(D + rho * I) * G'X * rhs
         
-        VectorXd rhs = cache_XY + rho * aux_z - dual_y;
+        VectorXd rhs = XY + rho * aux_z - dual_y;
         if(thinX)
         {
-            res.noalias() = solver.solve(rhs);
+            res.noalias() = evecs.transpose() * rhs;
+            res.array() /= (evals + rho);
+            res = evecs * res;
         } else {
-            res = rhs;
-            res.noalias() -= (*datX).transpose() * solver.solve((*datX) * rhs);
+            VectorXd tmp = (*datX) * rhs;
+            tmp = evecs.transpose() * tmp;
+            tmp.array() /= (evals + rho);
+            tmp = evecs * tmp;
+            res.noalias() = rhs - (*datX).transpose() * tmp;
             res /= rho;
         }
     }
@@ -64,11 +75,7 @@ private:
         res.noalias() = main_x + dual_y / rho;
         soft_threshold(res, lambda / rho);
     }
-    virtual void rho_changed_action()
-    {
-        cache_XX.diagonal() = cache_XXdiag + rho;
-        solver.compute(cache_XX);
-    }
+    virtual void rho_changed_action() {}
     
 public:
     ADMMLasso(const MatrixXd &datX_, const VectorXd &datY_,
@@ -77,17 +84,18 @@ public:
         ADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
                  eps_abs_, eps_rel_),
         datX(&datX_), thinX(datX_.rows() > datX_.cols()),
-        cache_XY(datX_.transpose() * datY_)
+        XY(datX_.transpose() * datY_)
     {
         if(thinX)
-            cache_XX = datX_.transpose() * datX_;
+            solver.compute(datX_.transpose() * datX_);
         else
-            cache_XX = datX_ * datX_.transpose();
+            solver.compute(datX_ * datX_.transpose());
         
-        cache_XXdiag = cache_XX.diagonal();
+        evals = solver.eigenvalues();
+        evecs = solver.eigenvectors();
     }
 
-    virtual double lambda_max() { return cache_XY.array().abs().maxCoeff(); }
+    virtual double lambda_max() { return XY.array().abs().maxCoeff(); }
 
     // init() is a cold start for the first lambda
     virtual void init(double lambda_, double rho_)
