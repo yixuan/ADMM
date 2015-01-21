@@ -63,11 +63,19 @@ plot(rho, niter)
 ### Performance
 
 ```{r}
-# compute the full solution path, with the data above
+# compute the full solution path, n > p
+set.seed(123)
+n <- 1000
+p <- 300
+m <- 10
+b <- matrix(c(runif(m), rep(0, p - m)))
+x <- matrix(rnorm(n * p, sd = 2), n, p)
+y <- x %*% b + rnorm(n)
+
 system.time(res1 <- glmnet(x, y))
 system.time(res2 <- admm_lasso(x, y))
 
-# high dimension, small sample
+# p > n, single lambda
 set.seed(123)
 n <- 100
 p <- 3000
@@ -76,11 +84,9 @@ b <- matrix(c(runif(m), rep(0, p - m)))
 x <- matrix(rnorm(n * p, sd = 2), n, p)
 y <- x %*% b + rnorm(n)
 
-system.time(
-    res1 <- coef(glmnet(x, y), s = exp(-2), exact = TRUE)
-)
-
+system.time(res1 <- coef(glmnet(x, y), s = exp(-2), exact = TRUE))
 system.time(res2 <- admm_lasso(x, y, exp(-2)))
+
 res2$niter
 range(as.numeric(res1) - res2$beta)
 ```
