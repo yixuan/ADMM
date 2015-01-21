@@ -19,12 +19,9 @@ private:
     typedef Eigen::ArrayXd ArrayXd;
     typedef Eigen::HouseholderQR<MatrixXd> QRdecomp;
 
-    const MatrixXd *datX;         // data matrix
     double lambda;                // L1 penalty
-    const bool thinX;             // whether nrow(X) > ncol(X)
-
     const VectorXd XY;            // X'y
-    MatrixXd XQR;
+    MatrixXd XQR;                 // QR decomposition of X
     
     virtual void A_mult(VectorXd &x) {}                     // x -> x
     virtual void At_mult(VectorXd &x) {}                    // x -> x
@@ -58,7 +55,6 @@ public:
               double eps_rel_ = 1e-6) :
         ADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
                  eps_abs_, eps_rel_),
-        datX(&datX_), thinX(datX_.rows() > datX_.cols()),
         XY(datX_.transpose() * datY_)
     {
         QRdecomp decomp(datX_);
