@@ -2,6 +2,7 @@
 #define ADMMBASE_H
 
 #include <RcppEigen.h>
+// #include <ctime>
 
 // General problem setting
 //   minimize f(x) + g(z)
@@ -136,15 +137,29 @@ public:
     virtual int solve(int maxit)
     {
         int i;
+        // double tx = 0, tz = 0, ty = 0;
+        // clock_t t1, t2;
         for(i = 0; i < maxit; i++)
         {
+            // t1 = clock();
             update_x();
+            // t2 = clock();
+            // tx += double(t2 - t1) / CLOCKS_PER_SEC;
             update_z();
+            // t1 = clock();
+            // tz += double(t1 - t2) / CLOCKS_PER_SEC;
             update_y();
+            // t2 = clock();
+            // ty += double(t2 - t1) / CLOCKS_PER_SEC;
+
             // debuginfo();
             if(converged())
                 break;
         }
+        //Rcpp::Rcout << "time - x: " << tx << " secs\n";
+        //Rcpp::Rcout << "time - z: " << tz << " secs\n";
+        //Rcpp::Rcout << "time - y: " << ty << " secs\n";
+        //Rcpp::Rcout << "time - x + y + z: " << tx + ty + tz << " secs\n";
         return i + 1;
     }
 
