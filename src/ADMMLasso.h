@@ -24,9 +24,7 @@ private:
     const bool thinX;             // whether nrow(X) > ncol(X)
 
     const VectorXd XY;            // X'y
-    ArrayXd evals;                // eigenvalues of X'X (if thinX = true) or XX' (if thinX = false)
-    MatrixXd evecs;               // eigenvectors of X'X (if thinX = true) or XX' (if thinX = false)
-    EigenSolver solver;           // factorize X'X or XX'
+    const MatrixXd XX;
     
     virtual void A_mult(VectorXd &x) {}                     // x -> x
     virtual void At_mult(VectorXd &x) {}                    // x -> x
@@ -39,36 +37,12 @@ private:
     
     virtual void next_x(VectorXd &res)
     {
-        // For a thin X,
-        //   rhs = X'y + rho * aux_z - dual_y
-        //   newx = inv(X'X + rho * I) * rhs
-        // Let X'X = GDG',
-        //   inv(X'X + rho * I) = G * inv(D + rho * I) * G'
-        //   newx = G * inv(D + rho * I) * G' * rhs
-        //
-        // For a wide X,
-        //   inv(X'X + rho * I) = 1/rho * I -
-        //       1/rho * X' * inv(XX' + rho * I) * X
-        // so
-        //   newx = 1/rho * rhs - 1/rho * X' * inv(XX' + rho * I) * X * rhs
-        // Let XX' = GDG',
-        //   inv(XX' + rho * I) = G * inv(D + rho * I) * G'
-        //   newx = 1/rho * rhs - 1/rho * X'G * inv(D + rho * I) * G'X * rhs
-        
-        VectorXd rhs = XY + rho * aux_z - dual_y;
-        if(thinX)
-        {
-            res.noalias() = evecs.transpose() * rhs;
-            res.array() /= (evals + rho);
-            res = evecs * res;
-        } else {
-            VectorXd tmp = (*datX) * rhs;
-            tmp = evecs.transpose() * tmp;
-            tmp.array() /= (evals + rho);
-            tmp = evecs * tmp;
-            res.noalias() = rhs - (*datX).transpose() * tmp;
-            res /= rho;
-        }
+        VectorXd b = XY + rho * aux_z - dual_y;
+        VectorXd r = b - XX * main_x - rho * main_x;
+        double rsq = r.squaredNorm();
+        double alpha = r.transpose() * XX * r;
+        alpha = rsq / (alpha + rho * rsq);
+        res = main_x + alpha * r;
     }
     virtual void next_z(VectorXd &res)
     {
@@ -84,16 +58,9 @@ public:
         ADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
                  eps_abs_, eps_rel_),
         datX(&datX_), thinX(datX_.rows() > datX_.cols()),
-        XY(datX_.transpose() * datY_)
-    {
-        if(thinX)
-            solver.compute(datX_.transpose() * datX_);
-        else
-            solver.compute(datX_ * datX_.transpose());
-        
-        evals = solver.eigenvalues();
-        evecs = solver.eigenvectors();
-    }
+        XY(datX_.transpose() * datY_),
+        XX(datX_.transpose() * datX_)
+    {}
 
     virtual double lambda_max() { return XY.array().abs().maxCoeff(); }
 
@@ -117,6 +84,8 @@ public:
     virtual void init_warm(double lambda_)
     {
         lambda = lambda_;
+        update_z();
+        update_y();
         eps_primal = 0.0;
         eps_dual = 0.0;
         resid_primal = 9999;
