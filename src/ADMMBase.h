@@ -69,12 +69,12 @@ protected:
     // increase or decrease rho in iterations
     virtual void update_rho()
     {
-        if(resid_primal > 10 * resid_dual)
+        if(resid_primal > resid_dual)
         {
             rho *= 2;
             rho_changed_action();
         }
-        else if(resid_dual > 10 * resid_primal)
+        else if(resid_dual > resid_primal)
         {
             rho *= 0.5;
             rho_changed_action();
