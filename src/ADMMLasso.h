@@ -17,14 +17,14 @@ private:
     typedef Eigen::MatrixXd MatrixXd;
     typedef Eigen::VectorXd VectorXd;
     typedef Eigen::ArrayXd ArrayXd;
-    typedef Eigen::SelfAdjointEigenSolver<MatrixXd> EigenSolver;
+    typedef Eigen::HouseholderQR<MatrixXd> QRdecomp;
 
     const MatrixXd *datX;         // data matrix
     double lambda;                // L1 penalty
     const bool thinX;             // whether nrow(X) > ncol(X)
 
     const VectorXd XY;            // X'y
-    const MatrixXd XX;
+    MatrixXd XQR;
     
     virtual void A_mult(VectorXd &x) {}                     // x -> x
     virtual void At_mult(VectorXd &x) {}                    // x -> x
@@ -38,10 +38,11 @@ private:
     virtual void next_x(VectorXd &res)
     {
         VectorXd b = XY + rho * aux_z - dual_y;
-        VectorXd r = b - XX * main_x - rho * main_x;
+        VectorXd tmp = XQR.triangularView<Eigen::Upper>() * main_x;
+        VectorXd r = b - XQR.triangularView<Eigen::Upper>().transpose() * tmp - rho * main_x;
         double rsq = r.squaredNorm();
-        double alpha = r.transpose() * XX * r;
-        alpha = rsq / (alpha + rho * rsq);
+        tmp.noalias() = XQR.triangularView<Eigen::Upper>() * r;
+        double alpha = rsq / (rho * rsq + tmp.squaredNorm());
         res = main_x + alpha * r;
     }
     virtual void next_z(VectorXd &res)
@@ -58,9 +59,11 @@ public:
         ADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
                  eps_abs_, eps_rel_),
         datX(&datX_), thinX(datX_.rows() > datX_.cols()),
-        XY(datX_.transpose() * datY_),
-        XX(datX_.transpose() * datX_)
-    {}
+        XY(datX_.transpose() * datY_)
+    {
+        QRdecomp decomp(datX_);
+        XQR = decomp.matrixQR().topRows(std::min(datX_.cols(), datX_.rows()));
+    }
 
     virtual double lambda_max() { return XY.array().abs().maxCoeff(); }
 
