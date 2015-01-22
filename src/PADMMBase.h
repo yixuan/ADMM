@@ -111,6 +111,7 @@ protected:
         {
             tmp[i] = worker[i]->squared_xnorm();
         }
+
         double xnorm = sqrt(std::accumulate(tmp, tmp + n_comp, 0.0));
         delete [] tmp;
         
@@ -130,6 +131,7 @@ protected:
         {
             tmp[i] = worker[i]->squared_ynorm();
         }
+
         double ynorm = sqrt(std::accumulate(tmp, tmp + n_comp, 0.0));
         delete [] tmp;
         
@@ -199,6 +201,7 @@ public:
             worker[i]->update_y();
             tmp[i] = worker[i]->squared_resid_primal();
         }
+        
         resid_primal = sqrt(std::accumulate(tmp, tmp + n_comp, 0.0));
         delete [] tmp;
     }

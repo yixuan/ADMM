@@ -51,6 +51,8 @@ public:
     // when computing for the next lambda, we can use the
     // current main_x, aux_z, dual_y and rho as initial values
     virtual void init_warm() {}
+
+    virtual void add_XY_to(VectorXd &res) { res += XY; }
 };
 
 class PADMMLasso_Master: public PADMMBase_Master
@@ -116,7 +118,17 @@ public:
         }
     }
 
-    virtual double lambda_max() { return 1.0; }
+    virtual double lambda_max()
+    {
+        VectorXd XYwhole(dim_par);
+        XYwhole.setZero();
+        for(int i = 0; i < n_comp; i++)
+        {
+            static_cast<PADMMLasso_Worker *>(worker[i])->add_XY_to(XYwhole);
+        }
+
+        return XYwhole.array().abs().maxCoeff();
+    }
 
     // init() is a cold start for the first lambda
     virtual void init(double lambda_, double rho_)
