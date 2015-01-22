@@ -1,5 +1,9 @@
 #include "PADMMLasso.h"
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using Eigen::ArrayXd;
@@ -17,7 +21,7 @@ typedef Eigen::Map<ArrayXd>  MapArray;
 RcppExport SEXP admm_parlasso(SEXP x_, SEXP y_, SEXP n_, SEXP p_, SEXP lambda_,
                               SEXP nlambda_, SEXP lmin_ratio_,
                               SEXP standardize_, SEXP intercept_,
-                              SEXP opts_)
+                              SEXP nthread_, SEXP opts_)
 {
 BEGIN_RCPP
 
@@ -37,7 +41,12 @@ BEGIN_RCPP
 
     bool standardize = as<bool>(standardize_);
     bool intercept = as<bool>(intercept_);
-    
+
+#ifdef _OPENMP
+    int nthread = as<int>(nthread_);
+    omp_set_num_threads(nthread);
+#endif
+
     PADMMLasso_Master solver(datX, datY, p, eps_abs, eps_rel);
     if(nlambda < 1)
     {

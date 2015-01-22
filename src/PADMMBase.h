@@ -103,6 +103,10 @@ protected:
     virtual double compute_eps_primal()
     {
         double *tmp = new double[n_comp];
+
+#ifdef _OPENMP
+        #pragma omp parallel for
+#endif
         for(int i = 0; i < n_comp; i++)
         {
             tmp[i] = worker[i]->squared_xnorm();
@@ -118,6 +122,10 @@ protected:
     virtual double compute_eps_dual()
     {
         double *tmp = new double[n_comp];
+
+#ifdef _OPENMP
+        #pragma omp parallel for
+#endif
         for(int i = 0; i < n_comp; i++)
         {
             tmp[i] = worker[i]->squared_ynorm();
@@ -158,6 +166,10 @@ public:
         eps_primal = compute_eps_primal();
         eps_dual = compute_eps_dual();
         update_rho();
+
+#ifdef _OPENMP
+        #pragma omp parallel for
+#endif
         for(int i = 0; i < n_comp; i++)
         {
             worker[i]->update_rho(rho);
@@ -178,6 +190,10 @@ public:
     {
         resid_primal = 0;
         double *tmp = new double[n_comp];
+
+#ifdef _OPENMP
+        #pragma omp parallel for
+#endif
         for(int i = 0; i < n_comp; i++)
         {
             worker[i]->update_y();
