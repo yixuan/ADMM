@@ -22,7 +22,7 @@ admm_lasso = function(x, y, lambda = NULL,
 admm_parlasso = function(x, y, lambda = NULL,
                          nlambda = 100,
                          lambda_min_ratio = ifelse(nrow(x) < ncol(x), 0.01, 0.0001),
-                         standardize = TRUE, intercept = TRUE,
+                         standardize = TRUE, intercept = TRUE, nthread = 2,
                          opts = list())
 {
     # default parameters
@@ -33,9 +33,14 @@ admm_parlasso = function(x, y, lambda = NULL,
     # update from opts
     opts_admm[names(opts)] = opts
     
+    if(nthread < 1)
+        nthread = 1
+    if(nthread > 10)
+        nthread = 10
+    
     .Call("admm_parlasso", as.list(x), as.list(y),
           as.integer(length(unlist(y))), as.integer(ncol(x[[1]])),
           as.numeric(lambda), as.integer(nlambda), as.numeric(lambda_min_ratio),
-          as.logical(standardize), as.logical(intercept),
+          as.logical(standardize), as.logical(intercept), as.integer(nthread),
           as.list(opts_admm), PACKAGE = "ADMM")
 }
