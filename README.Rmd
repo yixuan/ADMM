@@ -23,34 +23,40 @@ b <- matrix(c(runif(m), rep(0, p - m)))
 x <- matrix(rnorm(n * p, mean = 1.2, sd = 2), n, p)
 y <- 5 + x %*% b + rnorm(n)
 
-n1 <- 50
-xx <- list(x[1:n1, ], x[(n1 + 1):n, ])
-yy <- list(y[1:n1], y[(n1 + 1):n])
-
 ## standardize = TRUE, intercept = TRUE
 fit <- glmnet(x, y)
 out_glmnet <- coef(fit, s = exp(-2), exact = TRUE)
 out_admm <- admm_lasso(x, y, exp(-2))
-data.frame(glmnet = as.numeric(out_glmnet), admm = out_admm$beta)
+out_paradmm <- admm_parlasso(x, y, exp(-2))
+data.frame(glmnet = as.numeric(out_glmnet),
+           admm = out_admm$beta,
+           paradmm = out_paradmm$beta)
 
 ## standardize = TRUE, intercept = FALSE
 fit2 <- glmnet(x, y, intercept = FALSE)
 out_glmnet2 <- coef(fit2, s = exp(-2), exact = TRUE)
 out_admm2 <- admm_lasso(x, y, exp(-2), intercept = FALSE)
-data.frame(glmnet = as.numeric(out_glmnet2), admm = out_admm2$beta)
+out_paradmm2 <- admm_parlasso(x, y, exp(-2), intercept = FALSE)
+data.frame(glmnet = as.numeric(out_glmnet2),
+           admm = out_admm2$beta,
+           paradmm = out_paradmm2$beta)
 
 ## standardize = FALSE, intercept = TRUE
 fit3 <- glmnet(x, y, standardize = FALSE)
 out_glmnet3 <- coef(fit3, s = exp(-2), exact = TRUE)
 out_admm3 <- admm_lasso(x, y, exp(-2), standardize = FALSE)
-data.frame(glmnet = as.numeric(out_glmnet3), admm = out_admm3$beta)
+out_paradmm3 <- admm_parlasso(x, y, exp(-2), standardize = FALSE)
+data.frame(glmnet = as.numeric(out_glmnet3),
+           admm = out_admm3$beta,
+           paradmm = out_paradmm3$beta)
 
 ## standardize = FALSE, intercept = FALSE
 fit4 <- glmnet(x, y, standardize = FALSE, intercept = FALSE)
 out_glmnet4 <- coef(fit4, s = exp(-2), exact = TRUE)
 out_admm4 <- admm_lasso(x, y, exp(-2), standardize = FALSE, intercept = FALSE)
-out_paradmm4 <- admm_parlasso(xx, yy, exp(-2), standardize = FALSE, intercept = FALSE)
-data.frame(glmnet = as.numeric(out_glmnet4), admm = out_admm4$beta,
+out_paradmm4 <- admm_parlasso(x, y, exp(-2), standardize = FALSE, intercept = FALSE)
+data.frame(glmnet = as.numeric(out_glmnet4),
+           admm = out_admm4$beta,
            paradmm = out_paradmm4$beta)
 ```
 
@@ -80,10 +86,12 @@ y <- x %*% b + rnorm(n)
 
 system.time(res1 <- glmnet(x, y))
 system.time(res2 <- admm_lasso(x, y))
+system.time(res3 <- admm_parlasso(x, y))
+system.time(res4 <- admm_parlasso(x, y, nthread = 4))
 
 # p > n, single lambda
 set.seed(123)
-n <- 100
+n <- 1000
 p <- 3000
 m <- 10
 b <- matrix(c(runif(m), rep(0, p - m)))
@@ -92,9 +100,15 @@ y <- x %*% b + rnorm(n)
 
 system.time(res1 <- coef(glmnet(x, y), s = exp(-2), exact = TRUE))
 system.time(res2 <- admm_lasso(x, y, exp(-2)))
+system.time(res3 <- admm_parlasso(x, y, exp(-2)))
+system.time(res4 <- admm_parlasso(x, y, exp(-2), nthread = 4))
 
 res2$niter
 range(as.numeric(res1) - res2$beta)
+res3$niter
+range(as.numeric(res1) - res3$beta)
+res4$niter
+range(as.numeric(res1) - res4$beta)
 ```
 
 ### rho setting
