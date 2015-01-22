@@ -3,3 +3,4 @@ import(methods)
 import(Rcpp)
 
 export(admm_lasso)
+export(admm_parlasso)
