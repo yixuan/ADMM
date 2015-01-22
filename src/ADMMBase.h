@@ -14,7 +14,6 @@ class ADMMBase
 {
 protected:
     typedef Eigen::VectorXd VectorXd;
-    typedef Eigen::Ref<const VectorXd> Ref;
 
     int dim_main;  // dimension of x
     int dim_aux;   // dimension of z
