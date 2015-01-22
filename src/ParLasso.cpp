@@ -1,4 +1,5 @@
 #include "PADMMLasso.h"
+#include "DataStd.h"
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -41,6 +42,8 @@ BEGIN_RCPP
 
     bool standardize = as<bool>(standardize_);
     bool intercept = as<bool>(intercept_);
+    DataStd datstd(n, p, standardize, intercept);
+    datstd.standardize(datX, datY);
 
     int nthread = as<int>(nthread_);
 #ifdef _OPENMP
@@ -50,7 +53,7 @@ BEGIN_RCPP
     PADMMLasso_Master solver(datX, datY, nthread, eps_abs, eps_rel);
     if(nlambda < 1)
     {
-        double lmax = solver.lambda_max() / n;
+        double lmax = solver.lambda_max() / n * datstd.get_scaleY();;
         double lmin = as<double>(lmin_ratio_) * lmax;
         lambda.setLinSpaced(as<int>(nlambda_), log(lmax), log(lmin));
         lambda = lambda.exp();
@@ -63,15 +66,15 @@ BEGIN_RCPP
 
     for(int i = 0; i < nlambda; i++)
     {
-        ilambda = lambda[i] * n;
+        ilambda = lambda[i] * n / datstd.get_scaleY();
         if(i == 0)
             solver.init(ilambda, rho_ratio * ilambda);
         else
             solver.init_warm(ilambda);
 
         niter[i] = solver.solve(maxit);
-        beta(0, i) = 0;
         beta.col(i).segment(1, p) = solver.get_z();
+        datstd.recover(beta(0, i), beta.col(i).segment(1, p));
     }
 
     return List::create(Named("lambda") = lambda,

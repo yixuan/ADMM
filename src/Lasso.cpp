@@ -1,4 +1,5 @@
 #include "ADMMLasso.h"
+#include "DataStd.h"
 
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
