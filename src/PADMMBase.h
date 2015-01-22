@@ -2,6 +2,7 @@
 #define PADMMBASE_H
 
 #include <RcppEigen.h>
+// #include <ctime>
 
 // Parallel ADMM for seperable objective function with regularization
 //   minimize \sum f_i(x) + g(x)
@@ -38,6 +39,8 @@ public:
         aux_z(&aux_z_),
         dual_y(dim_par_)
     {}
+    
+    virtual ~PADMMBase_Worker() {}
     
     virtual void update_rho(double rho_)
     {
@@ -147,6 +150,8 @@ public:
         aux_z(dim_par_),
         eps_abs(eps_abs_), eps_rel(eps_rel_)
     {}
+    
+    virtual ~PADMMBase_Master() {}
 
     virtual void update_x()
     {
@@ -215,14 +220,14 @@ public:
             // t2 = clock();
             // ty += double(t2 - t1) / CLOCKS_PER_SEC;
 
-            debuginfo();
+            // debuginfo();
             if(converged())
                 break;
         }
-        //Rcpp::Rcout << "time - x: " << tx << " secs\n";
-        //Rcpp::Rcout << "time - z: " << tz << " secs\n";
-        //Rcpp::Rcout << "time - y: " << ty << " secs\n";
-        //Rcpp::Rcout << "time - x + y + z: " << tx + ty + tz << " secs\n";
+        // Rcpp::Rcout << "time - x: " << tx << " secs\n";
+        // Rcpp::Rcout << "time - z: " << tz << " secs\n";
+        // Rcpp::Rcout << "time - y: " << ty << " secs\n";
+        // Rcpp::Rcout << "time - x + y + z: " << tx + ty + tz << " secs\n";
         return i + 1;
     }
 
