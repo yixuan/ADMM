@@ -18,18 +18,18 @@ typedef Eigen::Map<MatrixXd> MapMat;
 typedef Eigen::Map<VectorXd> MapVec;
 typedef Eigen::Map<ArrayXd>  MapArray;
 
-RcppExport SEXP admm_parlasso(SEXP x_, SEXP y_, SEXP n_, SEXP p_, SEXP lambda_,
+RcppExport SEXP admm_parlasso(SEXP x_, SEXP y_, SEXP lambda_,
                               SEXP nlambda_, SEXP lmin_ratio_,
                               SEXP standardize_, SEXP intercept_,
                               SEXP nthread_, SEXP opts_)
 {
 BEGIN_RCPP
 
-    List datX(x_);
-    List datY(y_);
+    MatrixXd datX(as<MatrixXd>(x_));
+    VectorXd datY(as<VectorXd>(y_));
     
-    int n = as<int>(n_);
-    int p = as<int>(p_);
+    int n = datX.rows();
+    int p = datX.cols();
     ArrayXd lambda(as<ArrayXd>(lambda_));
     int nlambda = lambda.size();
     
@@ -42,12 +42,12 @@ BEGIN_RCPP
     bool standardize = as<bool>(standardize_);
     bool intercept = as<bool>(intercept_);
 
-#ifdef _OPENMP
     int nthread = as<int>(nthread_);
+#ifdef _OPENMP
     omp_set_num_threads(nthread);
 #endif
 
-    PADMMLasso_Master solver(datX, datY, p, eps_abs, eps_rel);
+    PADMMLasso_Master solver(datX, datY, nthread, eps_abs, eps_rel);
     if(nlambda < 1)
     {
         double lmax = solver.lambda_max() / n;

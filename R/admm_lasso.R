@@ -38,9 +38,8 @@ admm_parlasso = function(x, y, lambda = NULL,
     if(nthread > 10)
         nthread = 10
     
-    .Call("admm_parlasso", as.list(x), as.list(y),
-          as.integer(length(unlist(y))), as.integer(ncol(x[[1]])),
-          as.numeric(lambda), as.integer(nlambda), as.numeric(lambda_min_ratio),
+    .Call("admm_parlasso", as.matrix(x), as.numeric(y), as.numeric(lambda),
+          as.integer(nlambda), as.numeric(lambda_min_ratio),
           as.logical(standardize), as.logical(intercept), as.integer(nthread),
           as.list(opts_admm), PACKAGE = "ADMM")
 }

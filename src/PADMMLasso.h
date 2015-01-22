@@ -9,8 +9,8 @@ private:
     typedef Eigen::MatrixXd MatrixXd;
     typedef Eigen::VectorXd VectorXd;
     typedef Eigen::ArrayXd ArrayXd;
-    typedef Eigen::Map<MatrixXd> MapMat;
-    typedef Eigen::Map<VectorXd> MapVec;
+    typedef Eigen::Ref<const MatrixXd> RefMat;
+    typedef Eigen::Ref<const VectorXd> RefVec;
     typedef Eigen::HouseholderQR<MatrixXd> QRdecomp;
 
     const VectorXd XY;            // X'y
@@ -28,7 +28,7 @@ private:
         res = main_x + alpha * r;
     }
 public:
-    PADMMLasso_Worker(const MapMat &datX_, const MapVec &datY_,
+    PADMMLasso_Worker(const RefMat &datX_, const RefVec &datY_,
                       VectorXd &aux_z_) :
         PADMMBase_Worker(datX_.cols(), aux_z_),
         XY(datX_.transpose() * datY_)
@@ -59,11 +59,6 @@ private:
     typedef Eigen::MatrixXd MatrixXd;
     typedef Eigen::VectorXd VectorXd;
     typedef Eigen::ArrayXd ArrayXd;
-    typedef Eigen::Map<MatrixXd> MapMat;
-    typedef Eigen::Map<VectorXd> MapVec;
-    typedef Rcpp::List RList;
-    typedef Rcpp::NumericMatrix RMat;
-    typedef Rcpp::NumericVector RVec;
     
     double lambda;  // L1 penalty
 
@@ -85,18 +80,31 @@ private:
     virtual void rho_changed_action() {}
     
 public:
-    PADMMLasso_Master(RList &datX, RList &datY, int dim_par_,
+    PADMMLasso_Master(const MatrixXd &datX_, const VectorXd &datY_,
+                      int nthread_,
                       double eps_abs_ = 1e-6,
                       double eps_rel_ = 1e-6) :
-        PADMMBase_Master(dim_par_, datX.length(), eps_abs_, eps_rel_)
+        PADMMBase_Master(datX_.cols(), nthread_, eps_abs_, eps_rel_)
     {
+        int n = datX_.rows();
+        int chunk_size = n / n_comp;
+        int last_size = chunk_size + n % n_comp;
+
+#ifdef _OPENMP
+        #pragma omp parallel for
+#endif
         for(int i = 0; i < n_comp; i++)
         {
-            RMat X = datX[i];
-            RVec Y = datY[i];
-            MapMat mX(Rcpp::as<MapMat>(X));
-            MapVec mY(Rcpp::as<MapVec>(Y));
-            worker[i] = new PADMMLasso_Worker(mX, mY, aux_z);
+            worker[i] = new PADMMLasso_Worker(
+                datX_.block(i * chunk_size, 0, chunk_size, dim_par),
+                datY_.segment(i * chunk_size, chunk_size),
+                aux_z);
+
+            if(i == n_comp - 1)
+                worker[i] = new PADMMLasso_Worker(
+                    datX_.bottomRows(last_size),
+                    datY_.tail(last_size),
+                    aux_z);
         }
     }
         
