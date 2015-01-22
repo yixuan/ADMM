@@ -102,11 +102,9 @@ public:
         
     virtual ~PADMMLasso_Master()
     {
-        PADMMLasso_Worker *w;
         for(int i = 0; i < n_comp; i++)
         {
-            w = (PADMMLasso_Worker *) worker[i];
-            delete w;
+            delete worker[i];
         }
     }
 
@@ -117,11 +115,10 @@ public:
     {
         aux_z.setZero();
         lambda = lambda_;
-        PADMMLasso_Worker *w;
+        rho = rho_;
         for(int i = 0; i < n_comp; i++)
         {
-            w = (PADMMLasso_Worker *) worker[i];
-            w->init(rho_);
+            static_cast<PADMMLasso_Worker *>(worker[i])->init(rho_);
         }
         eps_primal = 0.0;
         eps_dual = 0.0;
