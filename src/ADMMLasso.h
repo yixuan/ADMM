@@ -15,12 +15,13 @@
 // c => y
 // f(x) => lambda * ||x||_1
 // g(z) => 1/2 * ||z||^2
-class ADMMLasso: public ADMMBase<Eigen::VectorXd, Eigen::VectorXd>
+class ADMMLasso: public ADMMBase<Eigen::SparseVector<double>, Eigen::VectorXd>
 {
 private:
     typedef Eigen::MatrixXd MatrixXd;
     typedef Eigen::VectorXd VectorXd;
     typedef Eigen::ArrayXd ArrayXd;
+    typedef Eigen::SparseVector<double> SparseVector;
 
     const MatrixXd *datX;         // data matrix
     const VectorXd *datY;         // response vector
@@ -30,7 +31,7 @@ private:
 
     VectorXd cache_Ax;            // cache Ax
     
-    virtual void A_mult(VectorXd &res, VectorXd &x) // x -> Ax
+    virtual void A_mult(VectorXd &res, SparseVector &x) // x -> Ax
     {
         res = (*datX) * x;
     }
@@ -48,14 +49,14 @@ private:
         res.noalias() = cache_Ax + aux_z - (*datY);
     }
     
-    virtual void next_x(VectorXd &res)
+    virtual void next_x(SparseVector &res)
     {
         double gamma = 2 * rho + sprad;
-        VectorXd tmp = cache_Ax + aux_z - (*datY) + dual_y / rho;
-        res = (*datX).transpose() * tmp;
-        res /= (-gamma);
-        res += main_x;
-        soft_threshold(res, lambda / (rho * gamma));
+        VectorXd vec = cache_Ax + aux_z - (*datY) + dual_y / rho;
+        vec = (*datX).transpose() * vec;
+        vec /= (-gamma);
+        vec += main_x;
+        soft_threshold(res, vec, lambda / (rho * gamma));
     }
     virtual void next_z(VectorXd &res)
     {
@@ -114,18 +115,30 @@ public:
         resid_dual = 9999;
     }
 
-    static void soft_threshold(VectorXd &vec, const double &penalty)
+    static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
     {
+        std::vector<int> nonzero;
+        nonzero.reserve(vec.size() / 2);
+
         double *ptr = vec.data();
         for(int i = 0; i < vec.size(); i++)
         {
             if(ptr[i] > penalty)
+            {
                 ptr[i] -= penalty;
+                nonzero.push_back(i);
+            }
             else if(ptr[i] < -penalty)
+            {
                 ptr[i] += penalty;
-            else
-                ptr[i] = 0;
+                nonzero.push_back(i);
+            }
         }
+
+        int nnz = nonzero.size();
+        res.reserve(nnz);
+        for(int i = 0; i < nnz; i++)
+            res.insertBack(nonzero[i]) = ptr[nonzero[i]];
     }
 };
 

@@ -87,7 +87,8 @@ BEGIN_RCPP
             solver.init_warm(ilambda);
 
         niter[i] = solver.solve(maxit);
-        beta.col(i).segment(1, p) = solver.get_x();
+        VectorXd res = solver.get_x();
+        beta.col(i).segment(1, p) = res;
         datstd.recover(beta(0, i), beta.col(i).segment(1, p));
     }
 
