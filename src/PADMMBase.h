@@ -105,7 +105,7 @@ protected:
         double *tmp = new double[n_comp];
 
 #ifdef _OPENMP
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(dynamic)
 #endif
         for(int i = 0; i < n_comp; i++)
         {
@@ -125,7 +125,7 @@ protected:
         double *tmp = new double[n_comp];
 
 #ifdef _OPENMP
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(dynamic)
 #endif
         for(int i = 0; i < n_comp; i++)
         {
@@ -154,7 +154,7 @@ protected:
 
 public:
     PADMMBase_Master(int dim_par_, int n_comp_,
-        double eps_abs_ = 1e-6, double eps_rel_ = 1e-6) :
+                     double eps_abs_ = 1e-6, double eps_rel_ = 1e-6) :
         dim_par(dim_par_), n_comp(n_comp_),
         worker(n_comp_),
         aux_z(dim_par_),
@@ -170,7 +170,7 @@ public:
         update_rho();
 
 #ifdef _OPENMP
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(dynamic)
 #endif
         for(int i = 0; i < n_comp; i++)
         {
@@ -194,7 +194,7 @@ public:
         double *tmp = new double[n_comp];
 
 #ifdef _OPENMP
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(dynamic)
 #endif
         for(int i = 0; i < n_comp; i++)
         {
@@ -220,8 +220,87 @@ public:
         return (resid_primal < eps_primal) &&
                (resid_dual < eps_dual);
     }
-
+    
     virtual int solve(int maxit)
+    {
+        const double dim_factor = sqrt(double(dim_par));
+        const double comp_factor = sqrt(double(n_comp));
+        const double eps_abs_part = dim_factor * eps_abs;
+        
+        int niter = 0;
+        double xnorm_collector = 0.0;
+        double ynorm_collector = 0.0;
+        double znorm = 0.0;
+        double resid_primal_collector = 0.0;
+
+        VectorXd newz(dim_par);
+        VectorXd dual(dim_par);
+
+        #pragma omp parallel
+        {
+
+            for(int iter = 0; iter < maxit; iter++)
+            {
+                #pragma omp master
+                {
+                    update_rho();
+                    xnorm_collector = 0.0;
+                    ynorm_collector = 0.0;
+                    resid_primal_collector = 0.0;
+                }
+                #pragma omp barrier
+
+                #pragma omp for reduction(+:xnorm_collector,ynorm_collector)
+                for(int i = 0; i < n_comp; i++)
+                {
+                    xnorm_collector += worker[i]->squared_xnorm();
+                    ynorm_collector += worker[i]->squared_ynorm();
+                    worker[i]->update_rho(rho);
+                    worker[i]->update_x();
+                }
+                
+                #pragma omp master
+                {
+                    znorm = dim_factor * aux_z.norm();
+                    eps_primal = std::max(sqrt(xnorm_collector), znorm) * eps_rel + eps_abs_part;
+                    eps_dual = sqrt(ynorm_collector) * eps_rel + eps_abs_part;
+
+                    next_z(newz);
+                    dual = newz - aux_z;
+                    resid_dual = rho * comp_factor * dual.norm();
+                    aux_z.swap(newz);
+                }
+                #pragma omp barrier
+
+                #pragma omp for reduction(+:resid_primal_collector)
+                for(int i = 0; i < n_comp; i++)
+                {
+                    worker[i]->update_y();
+                    resid_primal_collector += worker[i]->squared_resid_primal();
+                }
+
+                #pragma omp master
+                {
+                    resid_primal = sqrt(resid_primal_collector);
+                }
+                #pragma omp barrier
+
+                if(converged())
+                {
+                    #pragma omp master
+                    {
+                        niter = iter + 1;
+                    }
+                    break;
+                }
+            }
+
+        }  // end of omp parallel
+
+        return niter;
+    }
+
+    virtual int solve0(int maxit)
     {
         int i;
         // double tx = 0, tz = 0, ty = 0;

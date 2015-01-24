@@ -86,14 +86,14 @@ public:
                       int nthread_,
                       double eps_abs_ = 1e-6,
                       double eps_rel_ = 1e-6) :
-        PADMMBase_Master(datX_.cols(), nthread_, eps_abs_, eps_rel_)
+        PADMMBase_Master(datX_.cols(), 10 * nthread_, eps_abs_, eps_rel_)
     {
         int n = datX_.rows();
         int chunk_size = n / n_comp;
         int last_size = chunk_size + n % n_comp;
 
 #ifdef _OPENMP
-        #pragma omp parallel for
+        #pragma omp parallel for schedule(dynamic)
 #endif
         for(int i = 0; i < n_comp; i++)
         {
