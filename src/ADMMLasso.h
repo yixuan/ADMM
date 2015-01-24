@@ -27,6 +27,8 @@ private:
     double ynorm;                 // L2 norm of Y
     double sprad;                 // spectral radius of X'X
     double lambda;                // L1 penalty
+
+    VectorXd cache_Ax;            // cache Ax
     
     virtual void A_mult(VectorXd &x) // x -> Ax
     {
@@ -42,13 +44,13 @@ private:
     virtual double c_norm() { return ynorm; } // ||c||_2
     virtual void next_residual(VectorXd &res)
     {
-        res.noalias() = (*datX) * main_x + aux_z - (*datY);
+        res.noalias() = cache_Ax + aux_z - (*datY);
     }
     
     virtual void next_x(VectorXd &res)
     {
         double gamma = 2 * rho + sprad;
-        VectorXd tmp = (*datX) * main_x + aux_z - (*datY) + dual_y / rho;
+        VectorXd tmp = cache_Ax + aux_z - (*datY) + dual_y / rho;
         res = (*datX).transpose() * tmp;
         res /= (-gamma);
         res += main_x;
@@ -56,10 +58,18 @@ private:
     }
     virtual void next_z(VectorXd &res)
     {
-        res = dual_y + rho * ((*datX) * main_x - (*datY));
+        cache_Ax = (*datX) * main_x;
+        res = dual_y + rho * (cache_Ax - (*datY));
         res /= (-1 - rho);
     }
     virtual void rho_changed_action() {}
+    // calculating eps_primal
+    virtual double compute_eps_primal()
+    {
+        double r = std::max(cache_Ax.norm(), aux_z.norm());
+        r = std::max(r, c_norm());
+        return r * eps_rel + sqrt(double(dim_dual)) * eps_abs;
+    }
     
 public:
     ADMMLasso(const MatrixXd &datX_, const VectorXd &datY_,
@@ -69,8 +79,11 @@ public:
         ADMMBase(datX_.cols(), datX_.rows(), datX_.rows(),
                  eps_abs_, eps_rel_),
         datX(&datX_), datY(&datY_), ynorm(datY_.norm()),
-        sprad(sprad_)
-    {}
+        sprad(sprad_),
+        cache_Ax(dim_dual)
+    {
+        cache_Ax.setZero();
+    }
 
     virtual double lambda_max() { return ((*datX).transpose() * (*datY)).array().abs().maxCoeff(); }
 
