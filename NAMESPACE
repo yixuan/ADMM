@@ -1,6 +1,7 @@
 useDynLib(ADMM)
 import(methods)
 import(Rcpp)
+import(rARPACK)
 
 export(admm_lasso)
 export(admm_parlasso)
