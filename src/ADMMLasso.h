@@ -117,28 +117,20 @@ public:
 
     static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
     {
-        std::vector<int> nonzero;
-        nonzero.reserve(vec.size() / 2);
+        res.reserve(vec.size() / 2);
 
         double *ptr = vec.data();
         for(int i = 0; i < vec.size(); i++)
         {
             if(ptr[i] > penalty)
             {
-                ptr[i] -= penalty;
-                nonzero.push_back(i);
+                res.insertBack(i) = ptr[i] - penalty;
             }
             else if(ptr[i] < -penalty)
             {
-                ptr[i] += penalty;
-                nonzero.push_back(i);
+                res.insertBack(i) = ptr[i] + penalty;
             }
         }
-
-        int nnz = nonzero.size();
-        res.reserve(nnz);
-        for(int i = 0; i < nnz; i++)
-            res.insertBack(nonzero[i]) = ptr[nonzero[i]];
     }
 };
 
