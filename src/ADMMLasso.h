@@ -15,7 +15,7 @@
 // c => y
 // f(x) => lambda * ||x||_1
 // g(z) => 1/2 * ||z||^2
-class ADMMLasso: public ADMMBase
+class ADMMLasso: public ADMMBase<Eigen::VectorXd, Eigen::VectorXd>
 {
 private:
     typedef Eigen::MatrixXd MatrixXd;
@@ -30,17 +30,18 @@ private:
 
     VectorXd cache_Ax;            // cache Ax
     
-    virtual void A_mult(VectorXd &x) // x -> Ax
+    virtual void A_mult(VectorXd &res, VectorXd &x) // x -> Ax
     {
-        VectorXd newx = (*datX) * x;
-        x.swap(newx);
+        res = (*datX) * x;
     }
-    virtual void At_mult(VectorXd &x) // x -> A'x
+    virtual void At_mult(VectorXd &res, VectorXd &y) // y -> A'y
     {
-        VectorXd newx = (*datX).transpose() * x;
-        x.swap(newx);
+        res = (*datX).transpose() * y;
     }
-    virtual void B_mult(VectorXd &x) {}  // x -> B * x
+    virtual void B_mult (VectorXd &res, VectorXd &z) // z -> Bz
+    {
+        res = z;
+    }  
     virtual double c_norm() { return ynorm; } // ||c||_2
     virtual void next_residual(VectorXd &res)
     {

@@ -10,6 +10,7 @@
 //
 // x(n, 1), z(m, 1), A(p, n), B(p, m), c(p, 1)
 //
+template<typename VecTypeX, typename VecTypeZ>
 class ADMMBase
 {
 protected:
@@ -19,8 +20,8 @@ protected:
     int dim_aux;   // dimension of z
     int dim_dual;  // dimension of Ax + Bz - c
 
-    VectorXd main_x;  // parameters to be optimized
-    VectorXd aux_z;   // auxiliary parameters
+    VecTypeX main_x;  // parameters to be optimized
+    VecTypeZ aux_z;   // auxiliary parameters
     VectorXd dual_y;  // Lagrangian multiplier
 
     double rho;      // augmented Lagrangian parameter
@@ -33,37 +34,37 @@ protected:
     double resid_primal;  // primal residual
     double resid_dual;    // dual residual
 
-    virtual void A_mult(VectorXd &x) = 0;   // (inplace) operation x -> Ax
-    virtual void At_mult(VectorXd &x) = 0;  // (inplace) operation x -> A'x
-    virtual void B_mult(VectorXd &x) = 0;   // (inplace) operation x -> Bx
-    virtual double c_norm() = 0;            // L2 norm of c
+    virtual void A_mult (VectorXd &res, VecTypeX &x) = 0;   // operation res -> Ax
+    virtual void At_mult(VectorXd &res, VectorXd &y) = 0;   // operation res -> A'y
+    virtual void B_mult (VectorXd &res, VecTypeZ &z) = 0;   // operation res -> Bz
+    virtual double c_norm() = 0;                            // L2 norm of c
 
     // res = Ax + Bz - c
     virtual void next_residual(VectorXd &res) = 0;
     // res = x in next iteration
-    virtual void next_x(VectorXd &res) = 0;
+    virtual void next_x(VecTypeX &res) = 0;
     // res = z in next iteration
-    virtual void next_z(VectorXd &res) = 0;
+    virtual void next_z(VecTypeZ &res) = 0;
     // action when rho is changed, e.g. re-factorize matrices
     virtual void rho_changed_action() {}
 
     // calculating eps_primal
     virtual double compute_eps_primal()
     {
-        VectorXd xcopy = main_x;
-        VectorXd zcopy = aux_z;
-        A_mult(xcopy);
-        B_mult(zcopy);
-        double r = std::max(xcopy.norm(), zcopy.norm());
+        VectorXd xres(dim_dual);
+        VectorXd zres(dim_dual);
+        A_mult(xres, main_x);
+        B_mult(zres, aux_z);
+        double r = std::max(xres.norm(), zres.norm());
         r = std::max(r, c_norm());
         return r * eps_rel + sqrt(double(dim_dual)) * eps_abs;
     }
     // calculating eps_dual
     virtual double compute_eps_dual()
     {
-        VectorXd ycopy = dual_y;
-        At_mult(ycopy);
-        return ycopy.norm() * eps_rel + sqrt(double(dim_main)) * eps_abs;
+        VectorXd yres(dim_main);
+        At_mult(yres, dual_y);
+        return yres.norm() * eps_rel + sqrt(double(dim_main)) * eps_abs;
     }
     // increase or decrease rho in iterations
     virtual void update_rho()
@@ -94,18 +95,21 @@ public:
         eps_dual = compute_eps_dual();
         update_rho();
 
-        VectorXd newx(dim_main);
+        VecTypeX newx(dim_main);
         next_x(newx);
         main_x.swap(newx);
     }
     virtual void update_z()
     {
-        VectorXd newz(dim_aux);
+        VecTypeZ newz(dim_aux);
         next_z(newz);
 
-        VectorXd dual = newz - aux_z;
-        B_mult(dual);
-        At_mult(dual);
+        // calculating A'B(newz - oldz)
+        VecTypeZ zdiff = newz - aux_z;
+        VectorXd tmp(dim_dual);
+        B_mult(tmp, zdiff);
+        VectorXd dual(dim_main);
+        At_mult(dual, tmp);
         resid_dual = rho * dual.norm();
 
         aux_z.swap(newz);
@@ -164,8 +168,8 @@ public:
         return i + 1;
     }
 
-    virtual VectorXd get_x() { return main_x; }
-    virtual VectorXd get_z() { return aux_z; }
+    virtual VecTypeX get_x() { return main_x; }
+    virtual VecTypeZ get_z() { return aux_z; }
     virtual VectorXd get_y() { return dual_y; }
 };
 
