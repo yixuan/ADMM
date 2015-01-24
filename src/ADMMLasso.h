@@ -7,61 +7,72 @@
 //
 // In ADMM form,
 //   minimize f(x) + g(z)
-//   s.t. x - z = 0
+//   s.t. Ax + z = c
 //
-// f(beta) = 1/2 * ||y - X * beta||^2
-// g(z) = lambda * ||z||_1
+// x => beta
+// z => y - X * beta
+// A => X
+// c => y
+// f(x) => lambda * ||x||_1
+// g(z) => 1/2 * ||z||^2
 class ADMMLasso: public ADMMBase
 {
 private:
     typedef Eigen::MatrixXd MatrixXd;
     typedef Eigen::VectorXd VectorXd;
     typedef Eigen::ArrayXd ArrayXd;
-    typedef Eigen::HouseholderQR<MatrixXd> QRdecomp;
 
+    const MatrixXd *datX;         // data matrix
+    const VectorXd *datY;         // response vector
+    double ynorm;                 // L2 norm of Y
+    double sprad;                 // spectral radius of X'X
     double lambda;                // L1 penalty
-    const VectorXd XY;            // X'y
-    MatrixXd XQR;                 // QR decomposition of X
     
-    virtual void A_mult(VectorXd &x) {}                     // x -> x
-    virtual void At_mult(VectorXd &x) {}                    // x -> x
-    virtual void B_mult(VectorXd &x) { x.noalias() = -x; }  // x -> x
-    virtual double c_norm() { return 0.0; }                 // ||c||_2 = 0
+    virtual void A_mult(VectorXd &x) // x -> Ax
+    {
+        VectorXd newx = (*datX) * x;
+        x.swap(newx);
+    }
+    virtual void At_mult(VectorXd &x) // x -> A'x
+    {
+        VectorXd newx = (*datX).transpose() * x;
+        x.swap(newx);
+    }
+    virtual void B_mult(VectorXd &x) {}  // x -> B * x
+    virtual double c_norm() { return ynorm; } // ||c||_2
     virtual void next_residual(VectorXd &res)
     {
-        res.noalias() = main_x - aux_z;
+        res.noalias() = (*datX) * main_x + aux_z - (*datY);
     }
     
     virtual void next_x(VectorXd &res)
     {
-        VectorXd b = XY + rho * aux_z - dual_y;
-        VectorXd tmp = XQR.triangularView<Eigen::Upper>() * main_x;
-        VectorXd r = b - XQR.triangularView<Eigen::Upper>().transpose() * tmp - rho * main_x;
-        double rsq = r.squaredNorm();
-        tmp.noalias() = XQR.triangularView<Eigen::Upper>() * r;
-        double alpha = rsq / (rho * rsq + tmp.squaredNorm());
-        res = main_x + alpha * r;
+        double gamma = 2 * rho + sprad;
+        VectorXd tmp = (*datX) * main_x + aux_z - (*datY) + dual_y / rho;
+        res = (*datX).transpose() * tmp;
+        res /= (-gamma);
+        res += main_x;
+        soft_threshold(res, lambda / (rho * gamma));
     }
     virtual void next_z(VectorXd &res)
     {
-        res.noalias() = main_x + dual_y / rho;
-        soft_threshold(res, lambda / rho);
+        res = dual_y + rho * ((*datX) * main_x - (*datY));
+        res /= (-1 - rho);
     }
     virtual void rho_changed_action() {}
     
 public:
     ADMMLasso(const MatrixXd &datX_, const VectorXd &datY_,
+              double sprad_,
               double eps_abs_ = 1e-6,
               double eps_rel_ = 1e-6) :
-        ADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
+        ADMMBase(datX_.cols(), datX_.rows(), datX_.rows(),
                  eps_abs_, eps_rel_),
-        XY(datX_.transpose() * datY_)
-    {
-        QRdecomp decomp(datX_);
-        XQR = decomp.matrixQR().topRows(std::min(datX_.cols(), datX_.rows()));
-    }
+        datX(&datX_), datY(&datY_), ynorm(datY_.norm()),
+        sprad(sprad_)
+    {}
 
-    virtual double lambda_max() { return XY.array().abs().maxCoeff(); }
+    virtual double lambda_max() { return ((*datX).transpose() * (*datY)).array().abs().maxCoeff(); }
 
     // init() is a cold start for the first lambda
     virtual void init(double lambda_, double rho_)
@@ -83,8 +94,6 @@ public:
     virtual void init_warm(double lambda_)
     {
         lambda = lambda_;
-        update_z();
-        update_y();
         eps_primal = 0.0;
         eps_dual = 0.0;
         resid_primal = 9999;

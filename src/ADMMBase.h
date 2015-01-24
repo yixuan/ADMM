@@ -94,7 +94,9 @@ public:
         eps_dual = compute_eps_dual();
         update_rho();
 
-        next_x(main_x);
+        VectorXd newx(dim_main);
+        next_x(newx);
+        main_x.swap(newx);
     }
     virtual void update_z()
     {

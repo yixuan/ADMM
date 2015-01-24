@@ -5,15 +5,32 @@ using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using Eigen::ArrayXd;
 using Eigen::ArrayXXd;
+
+using Rcpp::wrap;
 using Rcpp::as;
 using Rcpp::List;
 using Rcpp::IntegerVector;
 using Rcpp::NumericVector;
+using Rcpp::NumericMatrix;
 using Rcpp::Named;
 
 typedef Eigen::Map<MatrixXd> MapMat;
 typedef Eigen::Map<VectorXd> MapVec;
 typedef Eigen::Map<ArrayXd>  MapArray;
+
+// calculating the spectral radius of X'X
+inline double spectral_radius(const MatrixXd &X)
+{
+    NumericMatrix x = wrap(X);
+    Rcpp::Environment rARPACK("package:rARPACK");
+    Rcpp::Function svds = rARPACK["svds"];
+    IntegerVector k = IntegerVector::create(1);
+    IntegerVector nu = IntegerVector::create(0);
+    IntegerVector nv = nu;
+    List res = svds(x, k, nu, nv);
+    double sprad = as<double>(res["d"]);
+    return sprad * sprad;
+}
 
 RcppExport SEXP admm_lasso(SEXP x_, SEXP y_, SEXP lambda_,
                            SEXP nlambda_, SEXP lmin_ratio_,
@@ -44,8 +61,10 @@ BEGIN_RCPP
     bool intercept = as<bool>(intercept_);
     DataStd datstd(n, p, standardize, intercept);
     datstd.standardize(datX, datY);
+
+    double sprad = spectral_radius(datX);
     
-    ADMMLasso solver(datX, datY, eps_abs, eps_rel);
+    ADMMLasso solver(datX, datY, sprad, eps_abs, eps_rel);
     if(nlambda < 1)
     {
         double lmax = solver.lambda_max() / n * datstd.get_scaleY();
@@ -63,12 +82,12 @@ BEGIN_RCPP
     {
         ilambda = lambda[i] * n / datstd.get_scaleY();
         if(i == 0)
-            solver.init(ilambda, rho_ratio * ilambda);
+            solver.init(ilambda, ilambda / (rho_ratio * sprad));
         else
             solver.init_warm(ilambda);
 
         niter[i] = solver.solve(maxit);
-        beta.col(i).segment(1, p) = solver.get_z();
+        beta.col(i).segment(1, p) = solver.get_x();
         datstd.recover(beta(0, i), beta.col(i).segment(1, p));
     }
 
