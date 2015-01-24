@@ -9,5 +9,5 @@ Description: Solving Lasso like problems using the
     Alternating Direction Method of Multipliers (ADMM) algorithm
 License: GPL (>= 2)
 Depends: methods
-Imports: Rcpp (>= 0.11.0)
+Imports: Rcpp (>= 0.11.0), rARPACK
 LinkingTo: Rcpp, RcppEigen
