@@ -1,20 +1,6 @@
 #ifndef DATASTD_H
 #define DATASTD_H
 
-inline double sd_n(const Eigen::Ref<Eigen::VectorXd> &v)
-{
-    double mean = v.mean();
-    double s = 0.0, tmp = 0.0;
-    int n = v.size();
-    for(int i = 0; i < n; i++)
-    {
-        tmp = v[i] - mean;
-        s += tmp * tmp;
-    }
-    s /= n;
-    return sqrt(s);
-}
-
 class DataStd
 {
 private:
@@ -22,6 +8,7 @@ private:
     typedef Eigen::VectorXd VectorXd;
     typedef Eigen::ArrayXd ArrayXd;
     typedef Eigen::Ref<ArrayXd> Ref;
+    typedef Eigen::SparseVector<double> SparseVector;
 
     // flag - 0: standardize = FALSE, intercept = FALSE
     //             directly fit model
@@ -64,6 +51,20 @@ public:
             default:
                 break;
         }
+    }
+
+    static double sd_n(const Eigen::Ref<Eigen::VectorXd> &v)
+    {
+        double mean = v.mean();
+        double s = 0.0, tmp = 0.0;
+        int n = v.size();
+        for(int i = 0; i < n; i++)
+        {
+            tmp = v[i] - mean;
+            s += tmp * tmp;
+        }
+        s /= n;
+        return sqrt(s);
     }
 
     void standardize(MatrixXd &X, VectorXd &Y)
@@ -140,6 +141,54 @@ public:
                 coef /= scaleX;
                 coef *= scaleY;
                 beta0 = meanY - (coef * meanX).sum();
+                break;
+            default:
+                break;
+        }
+    }
+
+    // spvec -> spvec / arr, elementwise
+    static void elementwise_quot(Eigen::SparseVector<double> &spvec,
+                                 Eigen::ArrayXd &arr)
+    {
+        for(Eigen::SparseVector<double>::InnerIterator iter(spvec); iter; ++iter)
+        {
+            iter.valueRef() /= arr[iter.index()];
+        }
+    }
+
+    // inner product of spvec and arr
+    static double inner_product(Eigen::SparseVector<double> &spvec,
+                                Eigen::ArrayXd &arr)
+    {
+        double res = 0.0;
+        for(Eigen::SparseVector<double>::InnerIterator iter(spvec); iter; ++iter)
+        {
+            res += iter.value() * arr[iter.index()];
+        }
+        return res;
+    }
+
+    void recover(double &beta0, SparseVector &coef)
+    {
+        switch(flag)
+        {
+            case 0:
+                beta0 = 0;
+                break;
+            case 1:
+                beta0 = 0;
+                elementwise_quot(coef, scaleX);
+                coef *= scaleY;
+                break;
+            case 2:
+                coef *= scaleY;
+                beta0 = meanY - inner_product(coef, meanX);
+                break;
+            case 3:
+                elementwise_quot(coef, scaleX);
+                coef *= scaleY;
+                beta0 = meanY - inner_product(coef, meanX);
                 break;
             default:
                 break;

@@ -17,6 +17,8 @@ using Rcpp::Named;
 typedef Eigen::Map<MatrixXd> MapMat;
 typedef Eigen::Map<VectorXd> MapVec;
 typedef Eigen::Map<ArrayXd>  MapArray;
+typedef Eigen::SparseVector<double> SpVec;
+typedef Eigen::SparseMatrix<double> SpMat;
 
 // calculating the spectral radius of X'X
 inline double spectral_radius(const MatrixXd &X)
@@ -30,6 +32,16 @@ inline double spectral_radius(const MatrixXd &X)
     List res = svds(x, k, nu, nv);
     double sprad = as<double>(res["d"]);
     return sprad * sprad;
+}
+
+inline void write_beta_matrix(SpMat &betas, int col, double beta0, SpVec &coef)
+{
+    betas.insert(0, col) = beta0;
+
+    for(SpVec::InnerIterator iter(coef); iter; ++iter)
+    {
+        betas.insert(iter.index() + 1, col) = iter.value();
+    }
 }
 
 RcppExport SEXP admm_lasso(SEXP x_, SEXP y_, SEXP lambda_,
@@ -74,7 +86,9 @@ BEGIN_RCPP
         nlambda = lambda.size();
     }
 
-    ArrayXXd beta(p + 1, nlambda);
+    SpMat beta(p + 1, nlambda);
+    beta.reserve(Eigen::VectorXi::Constant(nlambda, std::min(n, p)));
+
     IntegerVector niter(nlambda);
     double ilambda = 0.0;
 
@@ -87,10 +101,13 @@ BEGIN_RCPP
             solver.init_warm(ilambda);
 
         niter[i] = solver.solve(maxit);
-        VectorXd res = solver.get_x();
-        beta.col(i).segment(1, p) = res;
-        datstd.recover(beta(0, i), beta.col(i).segment(1, p));
+        SpVec res = solver.get_x();
+        double beta0 = 0.0;
+        datstd.recover(beta0, res);
+        write_beta_matrix(beta, i, beta0, res);
     }
+
+    beta.makeCompressed();
 
     return List::create(Named("lambda") = lambda,
                         Named("beta") = beta,
