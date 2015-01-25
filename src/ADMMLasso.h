@@ -10,11 +10,12 @@
 //   s.t. Ax + z = c
 //
 // x => beta
-// z => y - X * beta
+// z => -X * beta
 // A => X
-// c => y
+// b => y
+// c => 0
 // f(x) => lambda * ||x||_1
-// g(z) => 1/2 * ||z||^2
+// g(z) => 1/2 * ||z + b||^2
 class ADMMLasso: public ADMMBase<Eigen::SparseVector<double>, Eigen::VectorXd>
 {
 private:
@@ -25,12 +26,10 @@ private:
 
     const MatrixXd *datX;         // data matrix
     const VectorXd *datY;         // response vector
-    double ynorm;                 // L2 norm of Y
     double sprad;                 // spectral radius of X'X
     double lambda;                // L1 penalty
 
     VectorXd cache_Ax;            // cache Ax
-    VectorXd cache_Ax_minus_c;    // cache Ax - c
     
     virtual void A_mult(VectorXd &res, SparseVector &x) // x -> Ax
     {
@@ -44,34 +43,31 @@ private:
     {
         res = z;
     }  
-    virtual double c_norm() { return ynorm; } // ||c||_2
+    virtual double c_norm() { return 0.0; } // ||c||_2
     virtual void next_residual(VectorXd &res)
     {
-        res.noalias() = cache_Ax_minus_c + aux_z;
+        res.noalias() = cache_Ax + aux_z;
     }
     
     virtual void next_x(SparseVector &res)
     {
         double gamma = 2 * rho + sprad;
-        VectorXd vec = cache_Ax_minus_c + aux_z + dual_y / rho;
-        vec = (*datX).transpose() * vec;
-        vec /= (-gamma);
+        VectorXd vec = cache_Ax + aux_z + dual_y / rho;
+        vec = -(*datX).transpose() * vec / gamma;
         vec += main_x;
         soft_threshold(res, vec, lambda / (rho * gamma));
     }
     virtual void next_z(VectorXd &res)
     {
         cache_Ax = (*datX) * main_x;
-        cache_Ax_minus_c = cache_Ax - (*datY);
 
-        res.noalias() = (dual_y + rho * cache_Ax_minus_c) / (-1 - rho);
+        res.noalias() = ((*datY) + dual_y + rho * cache_Ax) / (-1 - rho);
     }
     virtual void rho_changed_action() {}
     // calculating eps_primal
     virtual double compute_eps_primal()
     {
         double r = std::max(cache_Ax.norm(), aux_z.norm());
-        r = std::max(r, c_norm());
         return r * eps_rel + sqrt(double(dim_dual)) * eps_abs;
     }
     
@@ -82,9 +78,9 @@ public:
               double eps_rel_ = 1e-6) :
         ADMMBase(datX_.cols(), datX_.rows(), datX_.rows(),
                  eps_abs_, eps_rel_),
-        datX(&datX_), datY(&datY_), ynorm(datY_.norm()),
+        datX(&datX_), datY(&datY_),
         sprad(sprad_),
-        cache_Ax(dim_dual), cache_Ax_minus_c(-datY_)
+        cache_Ax(dim_dual)
     {
         cache_Ax.setZero();
     }
