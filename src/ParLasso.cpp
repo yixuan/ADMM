@@ -9,6 +9,7 @@ using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using Eigen::ArrayXd;
 using Eigen::ArrayXXd;
+
 using Rcpp::as;
 using Rcpp::List;
 using Rcpp::IntegerVector;
@@ -18,6 +19,18 @@ using Rcpp::Named;
 typedef Eigen::Map<MatrixXd> MapMat;
 typedef Eigen::Map<VectorXd> MapVec;
 typedef Eigen::Map<ArrayXd>  MapArray;
+typedef Eigen::SparseVector<double> SpVec;
+typedef Eigen::SparseMatrix<double> SpMat;
+
+inline void write_beta_matrix(SpMat &betas, int col, double beta0, SpVec &coef)
+{
+    betas.insert(0, col) = beta0;
+
+    for(SpVec::InnerIterator iter(coef); iter; ++iter)
+    {
+        betas.insert(iter.index() + 1, col) = iter.value();
+    }
+}
 
 RcppExport SEXP admm_parlasso(SEXP x_, SEXP y_, SEXP lambda_,
                               SEXP nlambda_, SEXP lmin_ratio_,
@@ -29,6 +42,10 @@ BEGIN_RCPP
     MatrixXd datX(as<MatrixXd>(x_));
     VectorXd datY(as<VectorXd>(y_));
     
+    // In glmnet, we minimize
+    //   1/(2n) * ||y - X * beta||^2 + lambda * ||beta||_1
+    // which is equivalent to minimizing
+    //   1/2 * ||y - X * beta||^2 + n * lambda * ||beta||_1
     int n = datX.rows();
     int p = datX.cols();
     ArrayXd lambda(as<ArrayXd>(lambda_));
@@ -46,21 +63,23 @@ BEGIN_RCPP
     datstd.standardize(datX, datY);
 
     int nthread = as<int>(nthread_);
-#ifdef _OPENMP
+/*#ifdef _OPENMP
     omp_set_num_threads(nthread);
-#endif
-
+#endif*/
+    
     PADMMLasso_Master solver(datX, datY, nthread, eps_abs, eps_rel);
     if(nlambda < 1)
     {
-        double lmax = solver.lambda_max() / n * datstd.get_scaleY();;
+        double lmax = solver.lambda_max() / n * datstd.get_scaleY();
         double lmin = as<double>(lmin_ratio_) * lmax;
         lambda.setLinSpaced(as<int>(nlambda_), log(lmax), log(lmin));
         lambda = lambda.exp();
         nlambda = lambda.size();
     }
 
-    ArrayXXd beta(p + 1, nlambda);
+    SpMat beta(p + 1, nlambda);
+    beta.reserve(Eigen::VectorXi::Constant(nlambda, std::min(n, p)));
+
     IntegerVector niter(nlambda);
     double ilambda = 0.0;
 
@@ -68,14 +87,18 @@ BEGIN_RCPP
     {
         ilambda = lambda[i] * n / datstd.get_scaleY();
         if(i == 0)
-            solver.init(ilambda, rho_ratio * ilambda);
+            solver.init(ilambda, ilambda / rho_ratio);
         else
             solver.init_warm(ilambda);
 
         niter[i] = solver.solve(maxit);
-        beta.col(i).segment(1, p) = solver.get_z();
-        datstd.recover(beta(0, i), beta.col(i).segment(1, p));
+        SpVec res = solver.get_x();
+        double beta0 = 0.0;
+        datstd.recover(beta0, res);
+        write_beta_matrix(beta, i, beta0, res);
     }
+
+    beta.makeCompressed();
 
     return List::create(Named("lambda") = lambda,
                         Named("beta") = beta,

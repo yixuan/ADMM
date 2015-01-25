@@ -4,40 +4,55 @@
 #include <RcppEigen.h>
 // #include <ctime>
 
-// Parallel ADMM for seperable objective function with regularization
-//   minimize \sum f_i(x) + g(x)
+// Parallel ADMM by splitting variables
+//   minimize loss(\sum A_i * x_i - b) + \sum r_i(x_i)
 // Equivalent to
-//   minimize \sum f_i(x_i) + g(z)
-//   s.t. x_i - z = 0
+//   minimize loss(\sum z_i - b) + \sum r_i(x_i)
+//   s.t. A_i * x_i - z = 0
 //
-// x_i(p, 1), z(p, 1)
+// x_i(p_i, 1), z(n, 1)
 //
-
+template<typename VecTypeX>
 class PADMMBase_Worker
 {
 protected:
     typedef Eigen::VectorXd VectorXd;
+    typedef Eigen::MatrixXd MatrixXd;
+    typedef Eigen::Ref<const MatrixXd> RefMat;
 
-    int dim_par;            // length of x_i and z
+    const RefMat datX;       // (sub)data matrix sent to this worker 
+    int dim_main;            // length of x_i
+    int dim_dual;            // length of A_i * x_i and z
 
-    VectorXd main_x;        // parameters to be optimized
-    const VectorXd *aux_z;  // auxiliary parameters from master
-    VectorXd dual_y;        // Lagrangian multiplier
-    VectorXd cache_resid_primal;  // store main_x - aux_z
+    VecTypeX main_x;         // parameters to be optimized
+    VectorXd Ax;             // A_i * x_i
+    VectorXd aux_z;          // A_i * x_i - Ax_bar + z_bar
 
-    double rho;             // augmented Lagrangian parameter
+    const VectorXd *dual_y;  // y from master
+    const VectorXd *resid_primal_vec; // Ax_bar - z_bar from master
+
+    double comp_squared_resid_dual; // squared norm of dual residual
+    
+    double rho;              // augmented Lagrangian parameter
 
     // res = x in next iteration
-    virtual void next_x(VectorXd &res) = 0;
+    virtual void next_x(VecTypeX &res) = 0;
+    // res = z in next iteration
+    virtual void next_z(VectorXd &res)
+    {
+        res.noalias() = Ax - (*resid_primal_vec);
+    }
     // action when rho is changed, e.g. re-factorize matrices
     virtual void rho_changed_action() {}
 
 public:
-    PADMMBase_Worker(int dim_par_, VectorXd &aux_z_) :
-        dim_par(dim_par_),
-        main_x(dim_par_),
-        aux_z(&aux_z_),
-        dual_y(dim_par_)
+    PADMMBase_Worker(const RefMat &datX_,
+                     const VectorXd &dual_y_,
+                     const VectorXd &resid_primal_vec_) :
+        datX(datX_),
+        dim_main(datX_.cols()), dim_dual(datX_.rows()),
+        main_x(dim_main), Ax(dim_dual), aux_z(dim_dual),
+        dual_y(&dual_y_), resid_primal_vec(&resid_primal_vec_)
     {}
     
     virtual ~PADMMBase_Worker() {}
@@ -50,39 +65,51 @@ public:
 
     virtual void update_x()
     {
-        VectorXd newx;
+        VecTypeX newx(dim_main);
+        newx.setZero();
         next_x(newx);
         main_x.swap(newx);
+
+        Ax = datX * main_x;
+        // Rcpp::Rcout << "Ax - worker: " << Ax[0] << std::endl;
     }
 
-    virtual void update_y()
+    virtual void update_z()
     {
-        cache_resid_primal = main_x - (*aux_z);
-        dual_y.noalias() += rho * cache_resid_primal;
+        VectorXd newz(dim_dual);
+        next_z(newz);
+
+        VectorXd dual = newz - aux_z;
+        comp_squared_resid_dual = (datX.transpose() * dual).squaredNorm();
+
+        aux_z.swap(newz);
     }
     
-    virtual double squared_resid_primal()
-    {
-        return cache_resid_primal.squaredNorm();
-    }
-    
-    virtual double squared_xnorm() { return main_x.squaredNorm(); }
-    virtual double squared_ynorm() { return dual_y.squaredNorm(); }
-    virtual void add_x_to(VectorXd &res) { res += main_x; }
-    virtual void add_y_to(VectorXd &res) { res += dual_y; }
+    virtual double squared_resid_dual() { return comp_squared_resid_dual; }
+
+    virtual void add_Ax_to(VectorXd &res) { res += Ax; }
+
+    virtual VecTypeX get_x() { return main_x; };
 };
 
 
+template<typename VecTypeX>
 class PADMMBase_Master
 {
 protected:
     typedef Eigen::VectorXd VectorXd;
+    typedef Eigen::MatrixXd MatrixXd;
 
-    int dim_par;               // length of x_i and z
+    const MatrixXd *datX;      // data matrix
+    int dim_main;              // number of all predictors
+    int dim_dual;              // length of A_i * x_i and z
     int n_comp;                // number of components in the objective function
-    std::vector<PADMMBase_Worker *> worker;  // each worker handles a component
+    std::vector<PADMMBase_Worker<VecTypeX> *> worker;  // each worker handles a component
 
-    VectorXd aux_z;            // master maintains the update of z
+    VectorXd dual_y;           // master maintains the update of y
+    VectorXd resid_primal_vec; // stores Ax_bar - z_bar
+    double Ax_bar_norm;        // norm of Ax_bar
+    double z_bar_norm;         // norm of z_bar
 
     double rho;                // augmented Lagrangian parameter
     double eps_abs;            // absolute tolerance
@@ -94,58 +121,33 @@ protected:
     double resid_primal;       // primal residual
     double resid_dual;         // dual residual
 
-    // res = z in next iteration
-    virtual void next_z(VectorXd &res) = 0;
+    // res = z_bar
+    virtual void next_z_bar(VectorXd &res, VectorXd &Ax_bar) = 0;
     // action when rho is changed, e.g. re-factorize matrices
     virtual void rho_changed_action() {}
 
     // calculating eps_primal
     virtual double compute_eps_primal()
     {
-        double *tmp = new double[n_comp];
-
-#ifdef _OPENMP
-        #pragma omp parallel for schedule(dynamic)
-#endif
-        for(int i = 0; i < n_comp; i++)
-        {
-            tmp[i] = worker[i]->squared_xnorm();
-        }
-
-        double xnorm = sqrt(std::accumulate(tmp, tmp + n_comp, 0.0));
-        delete [] tmp;
-        
-        double znorm = sqrt(double(dim_par)) * aux_z.norm();
-        
-        return std::max(xnorm, znorm) * eps_rel + sqrt(double(dim_par)) * eps_abs;
+        double r = std::max(Ax_bar_norm, z_bar_norm);
+        return r * sqrt(double(n_comp)) * eps_rel + sqrt(double(dim_dual)) * eps_abs;
     }
     // calculating eps_dual
     virtual double compute_eps_dual()
     {
-        double *tmp = new double[n_comp];
-
-#ifdef _OPENMP
-        #pragma omp parallel for schedule(dynamic)
-#endif
-        for(int i = 0; i < n_comp; i++)
-        {
-            tmp[i] = worker[i]->squared_ynorm();
-        }
-
-        double ynorm = sqrt(std::accumulate(tmp, tmp + n_comp, 0.0));
-        delete [] tmp;
+        VectorXd Aty = (*datX).transpose() * dual_y;
         
-        return ynorm * eps_rel + sqrt(double(dim_par)) * eps_abs;
+        return Aty.norm() * eps_rel + sqrt(double(dim_main)) * eps_abs;
     }
     // increase or decrease rho in iterations
     virtual void update_rho()
     {
-        if(resid_primal > resid_dual)
+        if(resid_primal > 10 * resid_dual)
         {
             rho *= 2;
             rho_changed_action();
         }
-        else if(resid_dual > resid_primal)
+        else if(resid_dual > 10 * resid_primal)
         {
             rho *= 0.5;
             rho_changed_action();
@@ -153,11 +155,13 @@ protected:
     }
 
 public:
-    PADMMBase_Master(int dim_par_, int n_comp_,
+    PADMMBase_Master(const MatrixXd &datX_, int n_comp_,
                      double eps_abs_ = 1e-6, double eps_rel_ = 1e-6) :
-        dim_par(dim_par_), n_comp(n_comp_),
+        datX(&datX_), dim_main(datX_.cols()), dim_dual(datX_.rows()),
+        n_comp(n_comp_),
         worker(n_comp_),
-        aux_z(dim_par_),
+        dual_y(dim_dual), resid_primal_vec(dim_dual),
+        Ax_bar_norm(0.0), z_bar_norm(0.0),
         eps_abs(eps_abs_), eps_rel(eps_rel_)
     {}
     
@@ -169,41 +173,44 @@ public:
         eps_dual = compute_eps_dual();
         update_rho();
 
-#ifdef _OPENMP
-        #pragma omp parallel for schedule(dynamic)
-#endif
         for(int i = 0; i < n_comp; i++)
         {
             worker[i]->update_rho(rho);
             worker[i]->update_x();
         }
     }
-    virtual void update_z()
-    {
-        VectorXd newz(dim_par);
-        next_z(newz);
-
-        VectorXd dual = newz - aux_z;
-        resid_dual = rho * sqrt(double(n_comp)) * dual.norm();
-
-        aux_z.swap(newz);
-    }
     virtual void update_y()
     {
-        resid_primal = 0;
-        double *tmp = new double[n_comp];
-
-#ifdef _OPENMP
-        #pragma omp parallel for schedule(dynamic)
-#endif
+        // calculate Ax_bar
+        VectorXd Ax_bar(dim_dual);
+        Ax_bar.setZero();
         for(int i = 0; i < n_comp; i++)
         {
-            worker[i]->update_y();
-            tmp[i] = worker[i]->squared_resid_primal();
+            worker[i]->add_Ax_to(Ax_bar);
         }
+        Ax_bar /= n_comp;
+        Ax_bar_norm = Ax_bar.norm();
+
+        // calculate z_bar from Ax_bar
+        VectorXd z_bar(dim_dual);
+        next_z_bar(z_bar, Ax_bar);
+        z_bar_norm = z_bar.norm();
+
+        // calculate primal residual
+        resid_primal_vec = Ax_bar - z_bar;
+        resid_primal = sqrt(double(n_comp)) * resid_primal_vec.norm();
+
+        // update dual variable
+        dual_y.noalias() += rho * resid_primal_vec;
         
-        resid_primal = sqrt(std::accumulate(tmp, tmp + n_comp, 0.0));
-        delete [] tmp;
+        // dual residual vector = A_i * x_i - Ax_bar + z_bar
+        resid_dual = 0.0;
+        for(int i = 0; i < n_comp; i++)
+        {
+            worker[i]->update_z();
+            resid_dual += worker[i]->squared_resid_dual();
+        }
+        resid_dual = sqrt(resid_dual);
     }
 
     virtual void debuginfo()
@@ -220,87 +227,8 @@ public:
         return (resid_primal < eps_primal) &&
                (resid_dual < eps_dual);
     }
-    
+
     virtual int solve(int maxit)
-    {
-        const double dim_factor = sqrt(double(dim_par));
-        const double comp_factor = sqrt(double(n_comp));
-        const double eps_abs_part = dim_factor * eps_abs;
-        
-        int niter = 0;
-        double xnorm_collector = 0.0;
-        double ynorm_collector = 0.0;
-        double znorm = 0.0;
-        double resid_primal_collector = 0.0;
-
-        VectorXd newz(dim_par);
-        VectorXd dual(dim_par);
-
-        #pragma omp parallel
-        {
-
-            for(int iter = 0; iter < maxit; iter++)
-            {
-                #pragma omp master
-                {
-                    update_rho();
-                    xnorm_collector = 0.0;
-                    ynorm_collector = 0.0;
-                    resid_primal_collector = 0.0;
-                }
-                #pragma omp barrier
-
-                #pragma omp for reduction(+:xnorm_collector,ynorm_collector)
-                for(int i = 0; i < n_comp; i++)
-                {
-                    xnorm_collector += worker[i]->squared_xnorm();
-                    ynorm_collector += worker[i]->squared_ynorm();
-                    worker[i]->update_rho(rho);
-                    worker[i]->update_x();
-                }
-                
-                #pragma omp master
-                {
-                    znorm = dim_factor * aux_z.norm();
-                    eps_primal = std::max(sqrt(xnorm_collector), znorm) * eps_rel + eps_abs_part;
-                    eps_dual = sqrt(ynorm_collector) * eps_rel + eps_abs_part;
-
-                    next_z(newz);
-                    dual = newz - aux_z;
-                    resid_dual = rho * comp_factor * dual.norm();
-                    aux_z.swap(newz);
-                }
-                #pragma omp barrier
-
-                #pragma omp for reduction(+:resid_primal_collector)
-                for(int i = 0; i < n_comp; i++)
-                {
-                    worker[i]->update_y();
-                    resid_primal_collector += worker[i]->squared_resid_primal();
-                }
-
-                #pragma omp master
-                {
-                    resid_primal = sqrt(resid_primal_collector);
-                }
-                #pragma omp barrier
-
-                if(converged())
-                {
-                    #pragma omp master
-                    {
-                        niter = iter + 1;
-                    }
-                    break;
-                }
-            }
-
-        }  // end of omp parallel
-
-        return niter;
-    }
-
-    virtual int solve0(int maxit)
     {
         int i;
         // double tx = 0, tz = 0, ty = 0;
@@ -311,25 +239,21 @@ public:
             update_x();
             // t2 = clock();
             // tx += double(t2 - t1) / CLOCKS_PER_SEC;
-            update_z();
-            // t1 = clock();
-            // tz += double(t1 - t2) / CLOCKS_PER_SEC;
             update_y();
-            // t2 = clock();
-            // ty += double(t2 - t1) / CLOCKS_PER_SEC;
+            // t1 = clock();
+            // ty += double(t1 - t2) / CLOCKS_PER_SEC;
 
             // debuginfo();
             if(converged())
                 break;
         }
         // Rcpp::Rcout << "time - x: " << tx << " secs\n";
-        // Rcpp::Rcout << "time - z: " << tz << " secs\n";
         // Rcpp::Rcout << "time - y: " << ty << " secs\n";
-        // Rcpp::Rcout << "time - x + y + z: " << tx + ty + tz << " secs\n";
+        // Rcpp::Rcout << "time - x + y: " << tx + ty << " secs\n";
         return i + 1;
     }
 
-    virtual VectorXd get_z() { return aux_z; }
+    virtual VecTypeX get_x() = 0;
 };
 
 
