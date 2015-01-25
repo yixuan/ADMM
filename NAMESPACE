@@ -2,6 +2,7 @@ useDynLib(ADMM)
 import(methods)
 import(Rcpp)
 import(rARPACK)
+importClassesFrom(Matrix, dgCMatrix)
 
 export(admm_lasso)
 export(admm_parlasso)
