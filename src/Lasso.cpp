@@ -12,6 +12,8 @@ using Rcpp::List;
 using Rcpp::IntegerVector;
 using Rcpp::NumericVector;
 using Rcpp::NumericMatrix;
+using Rcpp::Environment;
+using Rcpp::Function;
 using Rcpp::Named;
 
 typedef Eigen::Map<MatrixXd> MapMat;
@@ -24,8 +26,8 @@ typedef Eigen::SparseMatrix<double> SpMat;
 inline double spectral_radius(const MatrixXd &X)
 {
     NumericMatrix x = wrap(X);
-    Rcpp::Environment rARPACK("package:rARPACK");
-    Rcpp::Function svds = rARPACK["svds"];
+    Environment rARPACK = Environment::namespace_env("rARPACK");
+    Function svds = rARPACK["svds"];
     IntegerVector k = IntegerVector::create(1);
     IntegerVector nu = IntegerVector::create(0);
     IntegerVector nv = nu;
