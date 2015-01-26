@@ -29,7 +29,7 @@ admm_parlasso = function(x, y, lambda = NULL,
     opts_admm = list(maxit = 10000L,
                      eps_abs = 1e-5,
                      eps_rel = 1e-5,
-                     rho_ratio = 10)
+                     rho_ratio = 0.1)
     # update from opts
     opts_admm[names(opts)] = opts
     
