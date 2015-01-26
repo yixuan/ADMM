@@ -172,6 +172,9 @@ public:
         eps_dual = compute_eps_dual();
         update_rho();
 
+#ifdef _OPENMP
+        #pragma omp parallel for schedule(dynamic)
+#endif
         for(int i = 0; i < n_comp; i++)
         {
             worker[i]->update_rho(rho);
@@ -203,13 +206,16 @@ public:
         dual_y.noalias() += rho * resid_primal_vec;
         
         // dual residual vector = A_i * x_i - Ax_bar + z_bar
-        resid_dual = 0.0;
+        double resid_dual_collector = 0.0;
+#ifdef _OPENMP
+        #pragma omp parallel for schedule(dynamic) reduction(+:resid_dual_collector)
+#endif
         for(int i = 0; i < n_comp; i++)
         {
             worker[i]->update_z();
-            resid_dual += worker[i]->squared_resid_dual();
+            resid_dual_collector += worker[i]->squared_resid_dual();
         }
-        resid_dual = sqrt(resid_dual) * rho;
+        resid_dual = sqrt(resid_dual_collector) * rho;
     }
 
     virtual void debuginfo()

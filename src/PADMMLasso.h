@@ -118,21 +118,26 @@ public:
                       int nthread_,
                       double eps_abs_ = 1e-6,
                       double eps_rel_ = 1e-6) :
-        PADMMBase_Master(datX_, 2 * nthread_, eps_abs_, eps_rel_),
+        PADMMBase_Master(datX_, nthread_, eps_abs_, eps_rel_),
         datY(&datY_)
     {
         int chunk_size = dim_main / n_comp;
         int last_size = chunk_size + dim_main % n_comp;
 
-        for(int i = 0; i < n_comp - 1; i++)
+#ifdef _OPENMP
+        #pragma omp parallel for schedule(dynamic)
+#endif
+        for(int i = 0; i < n_comp; i++)
         {
-            worker[i] = new PADMMLasso_Worker(
-                datX_.block(0, i * chunk_size, dim_dual, chunk_size),
-                dual_y, resid_primal_vec);
+            if(i < n_comp - 1)
+                worker[i] = new PADMMLasso_Worker(
+                    datX_.block(0, i * chunk_size, dim_dual, chunk_size),
+                    dual_y, resid_primal_vec);
+            else
+                worker[i] = new PADMMLasso_Worker(
+                    datX_.rightCols(last_size),
+                    dual_y, resid_primal_vec);
         }
-        worker[n_comp - 1] = new PADMMLasso_Worker(
-            datX_.rightCols(last_size),
-            dual_y, resid_primal_vec);
 
         lmax = (datX_.transpose() * datY_).array().abs().maxCoeff();
     }

@@ -83,9 +83,9 @@ BEGIN_RCPP
     double sprad = max_eigenvalue(datX);
 
     int nthread = as<int>(nthread_);
-/*#ifdef _OPENMP
+#ifdef _OPENMP
     omp_set_num_threads(nthread);
-#endif*/
+#endif
 
     PADMMLasso_Master solver(datX, datY, nthread, eps_abs, eps_rel);
     if(nlambda < 1)
