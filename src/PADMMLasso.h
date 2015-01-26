@@ -33,9 +33,11 @@ public:
     {
         sprad = spectral_radius(datX_);
     }
-    
+     
     virtual ~PADMMLasso_Worker() {}
-    
+
+    virtual double get_spectral_radius() { return sprad; }
+
     // init() is a cold start for the first lambda
     virtual void init(double lambda_, double rho_)
     {
@@ -105,6 +107,7 @@ private:
     typedef Eigen::SparseVector<double> SparseVector;
 
     const VectorXd *datY;  // response vector
+    double avg_sprad;      // average spectral radius of A_i' * A_i
     double lmax;           // with this lambda, all coefficients will be zero
 
     virtual void next_z_bar(VectorXd &res, VectorXd &Ax_bar)
@@ -123,9 +126,10 @@ public:
     {
         int chunk_size = dim_main / n_comp;
         int last_size = chunk_size + dim_main % n_comp;
+        double avg_sprad_collector = 0.0;
 
 #ifdef _OPENMP
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(dynamic) reduction(+:avg_sprad_collector)
 #endif
         for(int i = 0; i < n_comp; i++)
         {
@@ -137,8 +141,11 @@ public:
                 worker[i] = new PADMMLasso_Worker(
                     datX_.rightCols(last_size),
                     dual_y, resid_primal_vec);
+
+            avg_sprad_collector += static_cast<PADMMLasso_Worker *>(worker[i])->get_spectral_radius();
         }
 
+        avg_sprad = avg_sprad_collector / n_comp;
         lmax = (datX_.transpose() * datY_).array().abs().maxCoeff();
     }
         
@@ -153,14 +160,14 @@ public:
     virtual double lambda_max() { return lmax; }
 
     // init() is a cold start for the first lambda
-    virtual void init(double lambda_, double rho_)
+    virtual void init(double lambda_, double rho_ratio_)
     {
         dual_y.setZero();
         resid_primal_vec.setZero();
-        rho = rho_;
+        rho = lambda_ / (rho_ratio_ * avg_sprad);
         for(int i = 0; i < n_comp; i++)
         {
-            static_cast<PADMMLasso_Worker *>(worker[i])->init(lambda_, rho_);
+            static_cast<PADMMLasso_Worker *>(worker[i])->init(lambda_, rho);
         }
         eps_primal = 0.0;
         eps_dual = 0.0;
