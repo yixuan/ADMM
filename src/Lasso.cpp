@@ -22,8 +22,8 @@ typedef Eigen::Map<ArrayXd>  MapArray;
 typedef Eigen::SparseVector<double> SpVec;
 typedef Eigen::SparseMatrix<double> SpMat;
 
-// calculating the spectral radius of X'X
-inline double spectral_radius(const MatrixXd &X)
+// calculating the spectral radius of X'X, i.e., the largest eigenvalue
+inline double max_eigenvalue(const MatrixXd &X)
 {
     NumericMatrix x = wrap(X);
     Environment rARPACK = Environment::namespace_env("rARPACK");
@@ -76,7 +76,7 @@ BEGIN_RCPP
     DataStd datstd(n, p, standardize, intercept);
     datstd.standardize(datX, datY);
 
-    double sprad = spectral_radius(datX);
+    double sprad = max_eigenvalue(datX);
     
     ADMMLasso solver(datX, datY, sprad, eps_abs, eps_rel);
     if(nlambda < 1)

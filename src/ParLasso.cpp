@@ -10,10 +10,14 @@ using Eigen::VectorXd;
 using Eigen::ArrayXd;
 using Eigen::ArrayXXd;
 
+using Rcpp::wrap;
 using Rcpp::as;
 using Rcpp::List;
 using Rcpp::IntegerVector;
 using Rcpp::NumericVector;
+using Rcpp::NumericMatrix;
+using Rcpp::Environment;
+using Rcpp::Function;
 using Rcpp::Named;
 
 typedef Eigen::Map<MatrixXd> MapMat;
@@ -30,6 +34,20 @@ inline void write_beta_matrix(SpMat &betas, int col, double beta0, SpVec &coef)
     {
         betas.insert(iter.index() + 1, col) = iter.value();
     }
+}
+
+// calculating the spectral radius of X'X, i.e., the largest eigenvalue
+inline double max_eigenvalue(const MatrixXd &X)
+{
+    NumericMatrix x = wrap(X);
+    Environment rARPACK = Environment::namespace_env("rARPACK");
+    Function svds = rARPACK["svds"];
+    IntegerVector k = IntegerVector::create(1);
+    IntegerVector nu = IntegerVector::create(0);
+    IntegerVector nv = nu;
+    List res = svds(x, k, nu, nv);
+    double sprad = as<double>(res["d"]);
+    return sprad * sprad;
 }
 
 RcppExport SEXP admm_parlasso(SEXP x_, SEXP y_, SEXP lambda_,
@@ -62,7 +80,7 @@ BEGIN_RCPP
     DataStd datstd(n, p, standardize, intercept);
     datstd.standardize(datX, datY);
 
-    double sprad = spectral_radius(datX);
+    double sprad = max_eigenvalue(datX);
 
     int nthread = as<int>(nthread_);
 /*#ifdef _OPENMP
