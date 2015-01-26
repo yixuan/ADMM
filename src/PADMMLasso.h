@@ -3,31 +3,6 @@
 
 #include "PADMMBase.h"
 
-// calculating the spectral radius of X'X, i.e., the largest eigenvalue
-inline double spectral_radius(const Eigen::Ref<const Eigen::MatrixXd> &X)
-{
-    double sprad = 0.0;
-
-    Eigen::MatrixXd XX;
-    if(X.cols() > X.rows())
-        XX = X * X.transpose();
-    else
-        XX = X.transpose() * X;
-    
-    int n = XX.cols();
-    Eigen::VectorXd evec = XX * XX.col(0);
-    Eigen::VectorXd b(n);
-    int niter = 0;
-    do {
-        b = evec.normalized();
-        evec.noalias() = XX * b;
-        sprad = b.dot(evec);
-        niter++;
-    } while(niter < 100 && (evec - sprad * b).norm() > 0.001 * sprad);
-
-    return sprad;
-}
-
 class PADMMLasso_Worker: public PADMMBase_Worker< Eigen::SparseVector<double> >
 {
 private:
@@ -75,6 +50,31 @@ public:
     // when computing for the next lambda, we can use the
     // current main_x, aux_z, dual_y and rho as initial values
     virtual void init_warm(double lambda_) { lambda = lambda_; }
+
+    // calculating the spectral radius of X'X, i.e., the largest eigenvalue
+    static double spectral_radius(const RefMat &X)
+    {
+        double sprad = 0.0;
+    
+        Eigen::MatrixXd XX;
+        if(X.cols() > X.rows())
+            XX = X * X.transpose();
+        else
+            XX = X.transpose() * X;
+        
+        int n = XX.cols();
+        Eigen::VectorXd evec = XX * XX.col(0);
+        Eigen::VectorXd b(n);
+        int niter = 0;
+        do {
+            b = evec.normalized();
+            evec.noalias() = XX * b;
+            sprad = b.dot(evec);
+            niter++;
+        } while(niter < 100 && (evec - sprad * b).norm() > 0.001 * sprad);
+    
+        return sprad;
+    }
 
     static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
     {
