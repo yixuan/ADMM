@@ -62,11 +62,13 @@ BEGIN_RCPP
     DataStd datstd(n, p, standardize, intercept);
     datstd.standardize(datX, datY);
 
+    double sprad = spectral_radius(datX);
+
     int nthread = as<int>(nthread_);
 /*#ifdef _OPENMP
     omp_set_num_threads(nthread);
 #endif*/
-    
+
     PADMMLasso_Master solver(datX, datY, nthread, eps_abs, eps_rel);
     if(nlambda < 1)
     {
@@ -87,7 +89,7 @@ BEGIN_RCPP
     {
         ilambda = lambda[i] * n / datstd.get_scaleY();
         if(i == 0)
-            solver.init(ilambda, ilambda / rho_ratio);
+            solver.init(ilambda, ilambda / (rho_ratio * sprad));
         else
             solver.init_warm(ilambda);
 
