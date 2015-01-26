@@ -235,6 +235,86 @@ public:
 
     virtual int solve(int maxit)
     {
+        int niter = 0;
+        double resid_dual_collector = 0.0;
+
+        #pragma omp parallel
+        {
+            for(int iter = 0; iter < maxit; iter++)
+            {
+                #pragma omp master
+                {
+                    eps_primal = compute_eps_primal();
+                    eps_dual = compute_eps_dual();
+                    update_rho();
+                }
+                #pragma omp barrier
+
+                #pragma omp for schedule(dynamic)
+                for(int i = 0; i < n_comp; i++)
+                {
+                    worker[i]->update_rho(rho);
+                    worker[i]->update_x();
+                }
+
+                #pragma omp master
+                {
+                    // calculate Ax_bar
+                    VectorXd Ax_bar(dim_dual);
+                    Ax_bar.setZero();
+                    for(int i = 0; i < n_comp; i++)
+                    {
+                        worker[i]->add_Ax_to(Ax_bar);
+                    }
+                    Ax_bar /= n_comp;
+                    Ax_bar_norm = Ax_bar.norm();
+            
+                    // calculate z_bar from Ax_bar
+                    VectorXd z_bar(dim_dual);
+                    next_z_bar(z_bar, Ax_bar);
+                    z_bar_norm = z_bar.norm();
+            
+                    // calculate primal residual
+                    resid_primal_vec = Ax_bar - z_bar;
+                    resid_primal = sqrt(double(n_comp)) * resid_primal_vec.norm();
+            
+                    // update dual variable
+                    dual_y.noalias() += rho * resid_primal_vec;
+
+                    resid_dual_collector = 0.0;
+                }
+                #pragma omp barrier
+
+                // dual residual vector = A_i * x_i - Ax_bar + z_bar
+                #pragma omp for schedule(dynamic) reduction(+:resid_dual_collector)
+                for(int i = 0; i < n_comp; i++)
+                {
+                    worker[i]->update_z();
+                    resid_dual_collector += worker[i]->squared_resid_dual();
+                }
+
+                #pragma omp master
+                {
+                    resid_dual = sqrt(resid_dual_collector) * rho;
+                }
+                #pragma omp barrier
+
+                if(converged())
+                {
+                    #pragma omp master
+                    {
+                        niter = iter + 1;
+                    }
+                    break;
+                }
+            }
+        }
+            
+        return niter;
+    }
+
+    virtual int solve0(int maxit)
+    {
         int i;
         // double tx = 0, tz = 0, ty = 0;
         // clock_t t1, t2;
