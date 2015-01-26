@@ -58,23 +58,43 @@ public:
     {
         double sprad = 0.0;
     
-        Eigen::MatrixXd XX;
-        if(X.cols() > X.rows())
-            XX = X * X.transpose();
+        int n = X.rows();
+        int p = X.cols();
+        bool thinX = n > p;
+        int dim = std::min(n, p);
+
+        VectorXd evec(dim);
+        VectorXd b(dim);
+        VectorXd tmp(std::max(n, p));
+        if(thinX)
+        {
+            tmp.noalias() = X * X.row(0);
+            evec.noalias() = X.transpose() * tmp;
+        }
         else
-            XX = X.transpose() * X;
-        
-        int n = XX.cols();
-        Eigen::VectorXd evec = XX * XX.col(0);
-        Eigen::VectorXd b(n);
-        int niter = 0;
-        do {
+        {
+            tmp.noalias() = X.transpose() * X.col(0);
+            evec.noalias() = X * tmp;
+        }
+
+        for(int i = 0; i < 100; i++)
+        {
             b = evec.normalized();
-            evec.noalias() = XX * b;
+            if(thinX)
+            {
+                tmp.noalias() = X * b;
+                evec.noalias() = X.transpose() * tmp;
+            }
+            else
+            {
+                tmp.noalias() = X.transpose() * b;
+                evec.noalias() = X * tmp;
+            }
             sprad = b.dot(evec);
-            niter++;
-        } while(niter < 100 && (evec - sprad * b).norm() > 0.001 * sprad);
-    
+            if((evec - sprad * b).norm() < 0.001 * sprad)
+                break;
+        }
+
         return sprad;
     }
 
