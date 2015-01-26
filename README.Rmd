@@ -17,7 +17,7 @@ library(glmnet)
 library(ADMM)
 set.seed(123)
 n <- 100
-p <- 10
+p <- 100
 m <- 5
 b <- matrix(c(runif(m), rep(0, p - m)))
 x <- matrix(rnorm(n * p, mean = 1.2, sd = 2), n, p)
@@ -30,7 +30,7 @@ out_admm <- admm_lasso(x, y, exp(-2))
 out_paradmm <- admm_parlasso(x, y, exp(-2))
 data.frame(glmnet = as.numeric(out_glmnet),
            admm = as.numeric(out_admm$beta),
-           paradmm = out_paradmm$beta)
+           paradmm = as.numeric(out_paradmm$beta))
 
 ## standardize = TRUE, intercept = FALSE
 fit2 <- glmnet(x, y, intercept = FALSE)
@@ -39,7 +39,7 @@ out_admm2 <- admm_lasso(x, y, exp(-2), intercept = FALSE)
 out_paradmm2 <- admm_parlasso(x, y, exp(-2), intercept = FALSE)
 data.frame(glmnet = as.numeric(out_glmnet2),
            admm = as.numeric(out_admm2$beta),
-           paradmm = out_paradmm2$beta)
+           paradmm = as.numeric(out_paradmm2$beta))
 
 ## standardize = FALSE, intercept = TRUE
 fit3 <- glmnet(x, y, standardize = FALSE)
@@ -48,7 +48,7 @@ out_admm3 <- admm_lasso(x, y, exp(-2), standardize = FALSE)
 out_paradmm3 <- admm_parlasso(x, y, exp(-2), standardize = FALSE)
 data.frame(glmnet = as.numeric(out_glmnet3),
            admm = as.numeric(out_admm3$beta),
-           paradmm = out_paradmm3$beta)
+           paradmm = as.numeric(out_paradmm3$beta))
 
 ## standardize = FALSE, intercept = FALSE
 fit4 <- glmnet(x, y, standardize = FALSE, intercept = FALSE)
@@ -57,12 +57,13 @@ out_admm4 <- admm_lasso(x, y, exp(-2), standardize = FALSE, intercept = FALSE)
 out_paradmm4 <- admm_parlasso(x, y, exp(-2), standardize = FALSE, intercept = FALSE)
 data.frame(glmnet = as.numeric(out_glmnet4),
            admm = as.numeric(out_admm4$beta),
-           paradmm = out_paradmm4$beta)
+           paradmm = as.numeric(out_paradmm4$beta))
 ```
 
 ### rho setting
 
 ```{r eval=FALSE}
+lambda <- exp(-2)
 rho_ratio <- exp(seq(log(0.1), log(10), length.out = 100))
 niter <- sapply(rho_ratio,
     function(r) admm_lasso(x, y, lambda, opts = list(rho_ratio = r))$niter
@@ -104,14 +105,15 @@ system.time(res4 <- admm_parlasso(x, y, exp(-2), nthread = 4))
 res2$niter
 range(as.numeric(res1) - as.numeric(res2$beta))
 res3$niter
-range(as.numeric(res1) - res3$beta)
+range(as.numeric(res1) - as.numeric(res3$beta))
 res4$niter
-range(as.numeric(res1) - res4$beta)
+range(as.numeric(res1) - as.numeric(res4$beta))
 ```
 
 ### rho setting
 
 ```{r eval=FALSE}
+lambda <- exp(-2)
 rho_ratio <- exp(seq(log(0.1), log(10), length.out = 100))
 niter <- sapply(rho_ratio,
     function(r) admm_lasso(x, y, lambda, opts = list(rho_ratio = r))$niter
