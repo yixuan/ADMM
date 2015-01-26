@@ -3,6 +3,31 @@
 
 #include "PADMMBase.h"
 
+// calculating the spectral radius of X'X, i.e., the largest eigenvalue
+inline double spectral_radius(const Eigen::Ref<const Eigen::MatrixXd> &X)
+{
+    double sprad = 0.0;
+
+    Eigen::MatrixXd XX;
+    if(X.cols() > X.rows())
+        XX = X * X.transpose();
+    else
+        XX = X.transpose() * X;
+    
+    int n = XX.cols();
+    Eigen::VectorXd evec = XX * XX.col(0);
+    Eigen::VectorXd b(n);
+    int niter = 0;
+    do {
+        b = evec.normalized();
+        evec.noalias() = XX * b;
+        sprad = b.dot(evec);
+        niter++;
+    } while(niter < 100 && (evec - sprad * b).norm() > 0.001 * sprad);
+
+    return sprad;
+}
+
 class PADMMLasso_Worker: public PADMMBase_Worker< Eigen::SparseVector<double> >
 {
 private:
@@ -31,23 +56,7 @@ public:
                       const VectorXd &resid_primal_vec_) :
         PADMMBase_Worker(datX_, dual_y_, resid_primal_vec_)
     {
-        // sprad is the largest eigenvalue of A_i'A_i
-        MatrixXd XX;
-        if(dim_main > dim_dual)
-            XX = datX_ * datX_.transpose();
-        else
-            XX = datX_.transpose() * datX_;
-
-        int n = XX.cols();
-        VectorXd evec = XX * XX.col(0);
-        VectorXd b(n);
-        int niter = 0;
-        do {
-            b = evec.normalized();
-            evec.noalias() = XX * b;
-            sprad = b.dot(evec);
-            niter++;
-        } while(niter < 100 && (evec - sprad * b).norm() > 0.001 * sprad);
+        sprad = spectral_radius(datX_);
     }
     
     virtual ~PADMMLasso_Worker() {}
