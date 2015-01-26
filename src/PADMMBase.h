@@ -71,7 +71,6 @@ public:
         main_x.swap(newx);
 
         Ax = datX * main_x;
-        // Rcpp::Rcout << "Ax - worker: " << Ax[0] << std::endl;
     }
 
     virtual void update_z()
@@ -210,7 +209,7 @@ public:
             worker[i]->update_z();
             resid_dual += worker[i]->squared_resid_dual();
         }
-        resid_dual = sqrt(resid_dual);
+        resid_dual = sqrt(resid_dual) * rho;
     }
 
     virtual void debuginfo()
