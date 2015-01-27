@@ -23,6 +23,7 @@ admm_parlasso = function(x, y, lambda = NULL,
                          nlambda = 100,
                          lambda_min_ratio = ifelse(nrow(x) < ncol(x), 0.01, 0.0001),
                          standardize = TRUE, intercept = TRUE, nthread = 2,
+                         use_blas = FALSE,
                          opts = list())
 {
     # default parameters
@@ -41,5 +42,6 @@ admm_parlasso = function(x, y, lambda = NULL,
     .Call("admm_parlasso", as.matrix(x), as.numeric(y), as.numeric(lambda),
           as.integer(nlambda), as.numeric(lambda_min_ratio),
           as.logical(standardize), as.logical(intercept), as.integer(nthread),
+          as.logical(use_blas),
           as.list(opts_admm), PACKAGE = "ADMM")
 }

@@ -21,15 +21,25 @@ private:
     {
         double gamma = 2 * rho + sprad;
         VectorXd vec = (*dual_y) / rho + (*resid_primal_vec);
-        vec = -datX.transpose() * vec / gamma;
-        vec += main_x;
-        soft_threshold(res, vec, lambda / (rho * gamma));
+        VectorXd vec2(dim_main);
+        if(use_BLAS)
+        {
+            BLAStprod(vec2, -1.0/gamma, datX_ptr, dim_dual, dim_main, vec);
+        }
+        else
+        {
+            vec2.noalias() = -datX.transpose() * vec / gamma;
+        }
+        vec2 += main_x;
+        soft_threshold(res, vec2, lambda / (rho * gamma));
     }
 public:
     PADMMLasso_Worker(const RefMat &datX_,
+                      const double *datX_ptr_,
                       const VectorXd &dual_y_,
-                      const VectorXd &resid_primal_vec_) :
-        PADMMBase_Worker(datX_, dual_y_, resid_primal_vec_)
+                      const VectorXd &resid_primal_vec_,
+                      bool use_BLAS_) :
+        PADMMBase_Worker(datX_, datX_ptr_, dual_y_, resid_primal_vec_, use_BLAS_)
     {
         sprad = spectral_radius(datX_);
     }
@@ -54,7 +64,7 @@ public:
     virtual void init_warm(double lambda_) { lambda = lambda_; }
 
     // calculating the spectral radius of X'X, i.e., the largest eigenvalue
-    static double spectral_radius(const RefMat &X)
+    virtual double spectral_radius(const RefMat &X)
     {
         double sprad = 0.0;
     
@@ -82,13 +92,30 @@ public:
             b = evec.normalized();
             if(thinX)
             {
-                tmp.noalias() = X * b;
-                evec.noalias() = X.transpose() * tmp;
+                if(use_BLAS)
+                {
+                    BLASprod(tmp, 1.0, datX_ptr, dim_dual, dim_main, b);
+                    BLAStprod(evec, 1.0, datX_ptr, dim_dual, dim_main, tmp);
+                }
+                else
+                {
+                    tmp.noalias() = X * b;
+                    evec.noalias() = X.transpose() * tmp;
+                }
+                
             }
             else
             {
-                tmp.noalias() = X.transpose() * b;
-                evec.noalias() = X * tmp;
+                if(use_BLAS)
+                {
+                    BLAStprod(tmp, 1.0, datX_ptr, dim_dual, dim_main, b);
+                    BLASprod(evec, 1.0, datX_ptr, dim_dual, dim_main, tmp);
+                }
+                else
+                {
+                    tmp.noalias() = X.transpose() * b;
+                    evec.noalias() = X * tmp;
+                }
             }
             sprad = b.dot(evec);
             if((evec - sprad * b).norm() < 0.001 * sprad)
@@ -138,7 +165,7 @@ private:
     
 public:
     PADMMLasso_Master(const MatrixXd &datX_, const VectorXd &datY_,
-                      int nthread_,
+                      int nthread_, bool use_BLAS_,
                       double eps_abs_ = 1e-6,
                       double eps_rel_ = 1e-6) :
         PADMMBase_Master(datX_, nthread_, eps_abs_, eps_rel_),
@@ -156,11 +183,15 @@ public:
             if(i < n_comp - 1)
                 worker[i] = new PADMMLasso_Worker(
                     datX_.block(0, i * chunk_size, dim_dual, chunk_size),
-                    dual_y, resid_primal_vec);
+                    &datX_(0, i * chunk_size),
+                    dual_y, resid_primal_vec,
+                    use_BLAS_);
             else
                 worker[i] = new PADMMLasso_Worker(
                     datX_.rightCols(last_size),
-                    dual_y, resid_primal_vec);
+                    &datX_(0, i * chunk_size),
+                    dual_y, resid_primal_vec,
+                    use_BLAS_);
 
             avg_sprad_collector += static_cast<PADMMLasso_Worker *>(worker[i])->get_spectral_radius();
         }

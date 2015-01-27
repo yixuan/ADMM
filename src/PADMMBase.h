@@ -2,7 +2,37 @@
 #define PADMMBASE_H
 
 #include <RcppEigen.h>
+#include <R_ext/BLAS.h>
 // #include <ctime>
+
+// res = alpha * mat * vec
+inline void BLASprod(Eigen::VectorXd &res, double alpha, const double *mat,
+                     int m, int n, Eigen::VectorXd &vec)
+{
+    const char BLAS_notrans = 'N';
+    const int BLAS_one = 1;
+    const double BLAS_zero = 0.0;
+
+    F77_CALL(dgemv)(&BLAS_notrans, &m, &n,
+                    &alpha, mat, &m,
+                    vec.data(), &BLAS_one, &BLAS_zero,
+                    res.data(), &BLAS_one);
+}
+
+// res = alpha * mat' * vec
+inline void BLAStprod(Eigen::VectorXd &res, double alpha, const double *mat,
+                     int m, int n, Eigen::VectorXd &vec)
+{
+    const char BLAS_trans = 'T';
+    const int BLAS_one = 1;
+    const double BLAS_zero = 0.0;
+
+    F77_CALL(dgemv)(&BLAS_trans, &m, &n,
+                    &alpha, mat, &m,
+                    vec.data(), &BLAS_one, &BLAS_zero,
+                    res.data(), &BLAS_one);
+}
+
 
 // Parallel ADMM by splitting variables
 //   minimize loss(\sum A_i * x_i - b) + \sum r_i(x_i)
@@ -20,7 +50,8 @@ protected:
     typedef Eigen::MatrixXd MatrixXd;
     typedef Eigen::Ref<const MatrixXd> RefMat;
 
-    const RefMat datX;       // (sub)data matrix sent to this worker 
+    const RefMat datX;       // (sub)data matrix sent to this worker
+    const double *datX_ptr;
     int dim_main;            // length of x_i
     int dim_dual;            // length of A_i * x_i and z
 
@@ -33,6 +64,8 @@ protected:
 
     double comp_squared_resid_dual; // squared norm of dual residual
     
+    bool use_BLAS;
+
     double rho;              // augmented Lagrangian parameter
 
     // res = x in next iteration
@@ -47,12 +80,15 @@ protected:
 
 public:
     PADMMBase_Worker(const RefMat &datX_,
+                     const double *datX_ptr_,
                      const VectorXd &dual_y_,
-                     const VectorXd &resid_primal_vec_) :
-        datX(datX_),
+                     const VectorXd &resid_primal_vec_,
+                     bool use_BLAS_) :
+        datX(datX_), datX_ptr(datX_ptr_),
         dim_main(datX_.cols()), dim_dual(datX_.rows()),
         main_x(dim_main), Ax(dim_dual), aux_z(dim_dual),
-        dual_y(&dual_y_), resid_primal_vec(&resid_primal_vec_)
+        dual_y(&dual_y_), resid_primal_vec(&resid_primal_vec_),
+        use_BLAS(use_BLAS_)
     {}
     
     virtual ~PADMMBase_Worker() {}
@@ -79,7 +115,16 @@ public:
         next_z(newz);
 
         VectorXd dual = newz - aux_z;
-        comp_squared_resid_dual = (datX.transpose() * dual).squaredNorm();
+        VectorXd tmp(dim_main);
+        if(use_BLAS)
+        {
+            BLAStprod(tmp, 1.0, datX_ptr, dim_dual, dim_main, dual);
+        }
+        else
+        {
+            tmp.noalias() = datX.transpose() * dual;
+        }
+        comp_squared_resid_dual = tmp.squaredNorm();
 
         aux_z.swap(newz);
     }
@@ -112,6 +157,8 @@ protected:
     double Ax_bar_norm;        // norm of Ax_bar
     double z_bar_norm;         // norm of z_bar
 
+    bool use_BLAS;
+
     double rho;                // augmented Lagrangian parameter
     double eps_abs;            // absolute tolerance
     double eps_rel;            // relative tolerance
@@ -136,7 +183,15 @@ protected:
     // calculating eps_dual
     virtual double compute_eps_dual()
     {
-        VectorXd Aty = (*datX).transpose() * dual_y;
+        VectorXd Aty(dim_main);
+        if(use_BLAS)
+        {
+            BLAStprod(Aty, 1.0, datX->data(), dim_dual, dim_main, dual_y);
+        }
+        else
+        {
+            Aty.noalias() = (*datX).transpose() * dual_y;
+        }
         
         return Aty.norm() * eps_rel + sqrt(double(dim_main)) * eps_abs;
     }
@@ -156,13 +211,14 @@ protected:
     }
 
 public:
-    PADMMBase_Master(const MatrixXd &datX_, int n_comp_,
+    PADMMBase_Master(const MatrixXd &datX_, int n_comp_, bool use_BLAS_,
                      double eps_abs_ = 1e-6, double eps_rel_ = 1e-6) :
         datX(&datX_), dim_main(datX_.cols()), dim_dual(datX_.rows()),
         n_comp(n_comp_),
         worker(n_comp_),
         dual_y(dim_dual), resid_primal_vec(dim_dual),
         Ax_bar_norm(0.0), z_bar_norm(0.0),
+        use_BLAS(use_BLAS_),
         eps_abs(eps_abs_), eps_rel(eps_rel_)
     {}
     

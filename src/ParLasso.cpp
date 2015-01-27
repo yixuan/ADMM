@@ -39,7 +39,7 @@ inline void write_beta_matrix(SpMat &betas, int col, double beta0, SpVec &coef)
 RcppExport SEXP admm_parlasso(SEXP x_, SEXP y_, SEXP lambda_,
                               SEXP nlambda_, SEXP lmin_ratio_,
                               SEXP standardize_, SEXP intercept_,
-                              SEXP nthread_, SEXP opts_)
+                              SEXP nthread_, SEXP use_BLAS_, SEXP opts_)
 {
 BEGIN_RCPP
 
@@ -67,11 +67,12 @@ BEGIN_RCPP
     datstd.standardize(datX, datY);
 
     int nthread = as<int>(nthread_);
+    bool use_BLAS = as<bool>(use_BLAS_);
 #ifdef _OPENMP
     omp_set_num_threads(nthread);
 #endif
 
-    PADMMLasso_Master solver(datX, datY, nthread, eps_abs, eps_rel);
+    PADMMLasso_Master solver(datX, datY, nthread, use_BLAS, eps_abs, eps_rel);
     if(nlambda < 1)
     {
         double lmax = solver.lambda_max() / n * datstd.get_scaleY();
