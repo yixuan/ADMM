@@ -86,6 +86,8 @@ public:
     
     virtual double squared_resid_dual() { return comp_squared_resid_dual; }
 
+    virtual double squared_Aty_norm() { return (datX.transpose() * (*dual_y)).squaredNorm(); }
+
     virtual void add_Ax_to(VectorXd &res) { res += Ax; }
 
     virtual VecTypeX get_x() { return main_x; };
@@ -237,28 +239,25 @@ public:
     {
         int niter = 0;
         double resid_dual_collector = 0.0;
+        double Aty_norm_collector = 0.0;
 
         #pragma omp parallel
         {
             for(int iter = 0; iter < maxit; iter++)
             {
-                #pragma omp master
-                {
-                    eps_primal = compute_eps_primal();
-                    eps_dual = compute_eps_dual();
-                    update_rho();
-                }
-                #pragma omp barrier
-
-                #pragma omp for schedule(dynamic)
+                #pragma omp for schedule(dynamic) reduction(+:Aty_norm_collector)
                 for(int i = 0; i < n_comp; i++)
                 {
                     worker[i]->update_rho(rho);
                     worker[i]->update_x();
+                    Aty_norm_collector += worker[i]->squared_Aty_norm();
                 }
 
                 #pragma omp master
                 {
+                    eps_primal = compute_eps_primal();
+                    eps_dual = sqrt(Aty_norm_collector) * eps_rel + sqrt(double(dim_main)) * eps_abs;
+
                     // calculate Ax_bar
                     VectorXd Ax_bar(dim_dual);
                     Ax_bar.setZero();
@@ -296,6 +295,8 @@ public:
                 #pragma omp master
                 {
                     resid_dual = sqrt(resid_dual_collector) * rho;
+                    update_rho();
+                    Aty_norm_collector = 0.0;
                 }
                 #pragma omp barrier
 
