@@ -29,6 +29,9 @@ private:
     double sprad;                 // spectral radius of X'X
     double lambda;                // L1 penalty
 
+    int active_set_niter;
+    int active_set_save;
+
     VectorXd cache_Ax;            // cache Ax
     
     virtual void A_mult(VectorXd &res, SparseVector &x) // x -> Ax
@@ -48,18 +51,76 @@ private:
     {
         res.noalias() = cache_Ax + aux_z;
     }
+
+    virtual void active_set_update(SparseVector &res)
+    {
+        double gamma = 2 * rho + sprad;
+        double penalty = lambda / (rho * gamma);
+        VectorXd vec = (cache_Ax + aux_z + dual_y / rho) / gamma;
+        res = main_x;
+
+        for(SparseVector::InnerIterator iter(res); iter; ++iter)
+        {
+            double val = iter.value() - vec.dot((*datX).col(iter.index()));
+
+            if(val > penalty)
+            {
+                iter.valueRef() = val - penalty;
+            }
+            else if(val < -penalty)
+            {
+                iter.valueRef() = val + penalty;
+            }
+            else
+            {
+                iter.valueRef() = 0.0;
+            }
+        }
+    }
     
     virtual void next_x(SparseVector &res)
     {
-        double gamma = 2 * rho + sprad;
-        VectorXd vec = cache_Ax + aux_z + dual_y / rho;
-        vec = -(*datX).transpose() * vec / gamma;
-        vec += main_x;
-        soft_threshold(res, vec, lambda / (rho * gamma));
+        if(active_set_niter >= 10)
+        {
+            // clock_t t1, t2;
+            // t1 = clock();
+            active_set_update(res);
+            // t2 = clock();
+            // Rcpp::Rcout << "active set update: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
+            if(active_set_niter >= 100)
+                active_set_niter = 0;
+        }
+        else
+        {
+            double gamma = 2 * rho + sprad;
+            VectorXd vec = cache_Ax + aux_z + dual_y / rho;
+
+            // clock_t t1, t2;
+            // t1 = clock();
+            vec = -(*datX).transpose() * vec / gamma;
+            // t2 = clock();
+            // Rcpp::Rcout << "matrix product in x update: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
+    
+            vec += main_x;
+            soft_threshold(res, vec, lambda / (rho * gamma));
+    
+            // Rcpp::Rcout << "# non-zero coefs: " << res.nonZeros() << std::endl;
+        }
+        
+        
+        if(res.nonZeros() == active_set_save)
+            active_set_niter++;
+        else
+            active_set_niter = 0;
+        active_set_save = res.nonZeros();
     }
     virtual void next_z(VectorXd &res)
     {
+        // clock_t t1, t2;
+        // t1 = clock();
         cache_Ax = (*datX) * main_x;
+        // t2 = clock();
+        // Rcpp::Rcout << "matrix product in z update: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
 
         res.noalias() = ((*datY) + dual_y + rho * cache_Ax) / (-1 - rho);
     }
@@ -99,6 +160,8 @@ public:
         eps_dual = 0.0;
         resid_primal = 9999;
         resid_dual = 9999;
+        active_set_niter = 0;
+        active_set_save = 0;
 
         rho_changed_action();
     }
@@ -111,6 +174,8 @@ public:
         eps_dual = 0.0;
         resid_primal = 9999;
         resid_dual = 9999;
+        active_set_niter = 0;
+        active_set_save = 0;
     }
 
     static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
