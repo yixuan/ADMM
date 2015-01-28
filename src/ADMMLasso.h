@@ -3,6 +3,8 @@
 
 #include "ADMMBase.h"
 
+// #define ADMM_PROFILE 1
+
 // minimize  1/2 * ||y - X * beta||^2 + lambda * ||beta||_1
 //
 // In ADMM form,
@@ -82,11 +84,19 @@ private:
     {
         if(active_set_niter >= 10)
         {
-            // clock_t t1, t2;
-            // t1 = clock();
+
+            #if ADMM_PROFILE > 1
+            clock_t t1, t2;
+            t1 = clock();
+            #endif
+
             active_set_update(res);
-            // t2 = clock();
-            // Rcpp::Rcout << "active set update: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
+
+            #if ADMM_PROFILE > 1
+            t2 = clock();
+            Rcpp::Rcout << "active set update: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
+            #endif
+
             if(active_set_niter >= 100)
                 active_set_niter = 0;
         }
@@ -95,16 +105,24 @@ private:
             double gamma = 2 * rho + sprad;
             VectorXd vec = cache_Ax + aux_z + dual_y / rho;
 
-            // clock_t t1, t2;
-            // t1 = clock();
+            #if ADMM_PROFILE > 1
+            clock_t t1, t2;
+            t1 = clock();
+            #endif
+
             vec = -(*datX).transpose() * vec / gamma;
-            // t2 = clock();
-            // Rcpp::Rcout << "matrix product in x update: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
-    
+
+            #if ADMM_PROFILE > 1
+            t2 = clock();
+            Rcpp::Rcout << "matrix product in x update: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
+            #endif
+
             vec += main_x;
             soft_threshold(res, vec, lambda / (rho * gamma));
-    
-            // Rcpp::Rcout << "# non-zero coefs: " << res.nonZeros() << std::endl;
+
+            #if ADMM_PROFILE > 1
+            Rcpp::Rcout << "# non-zero coefs: " << res.nonZeros() << std::endl;
+            #endif
         }
         
         
@@ -116,11 +134,17 @@ private:
     }
     virtual void next_z(VectorXd &res)
     {
-        // clock_t t1, t2;
-        // t1 = clock();
+        #if ADMM_PROFILE > 1
+        clock_t t1, t2;
+        t1 = clock();
+        #endif
+
         cache_Ax = (*datX) * main_x;
-        // t2 = clock();
-        // Rcpp::Rcout << "matrix product in z update: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
+        
+        #if ADMM_PROFILE > 1
+        t2 = clock();
+        Rcpp::Rcout << "matrix product in z update: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
+        #endif
 
         res.noalias() = ((*datY) + dual_y + rho * cache_Ax) / (-1 - rho);
     }
