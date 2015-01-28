@@ -53,6 +53,9 @@ RcppExport SEXP admm_lasso(SEXP x_, SEXP y_, SEXP lambda_,
 {
 BEGIN_RCPP
 
+    // clock_t t1, t2;
+    // t1 = clock();
+
     MatrixXd datX(as<MatrixXd>(x_));
     VectorXd datY(as<VectorXd>(y_));
     
@@ -73,10 +76,21 @@ BEGIN_RCPP
 
     bool standardize = as<bool>(standardize_);
     bool intercept = as<bool>(intercept_);
+
+    // t2 = clock();
+    // Rcpp::Rcout << "part1: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs.\n";
+
+
     DataStd datstd(n, p, standardize, intercept);
     datstd.standardize(datX, datY);
 
+    // t1 = clock();
+    // Rcpp::Rcout << "part2: " << double(t1 - t2) / CLOCKS_PER_SEC << " secs.\n";
+
     double sprad = max_eigenvalue(datX);
+
+    // t2 = clock();
+    // Rcpp::Rcout << "part3: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs.\n";
     
     ADMMLasso solver(datX, datY, sprad, eps_abs, eps_rel);
     if(nlambda < 1)
@@ -108,6 +122,9 @@ BEGIN_RCPP
         datstd.recover(beta0, res);
         write_beta_matrix(beta, i, beta0, res);
     }
+
+    // t1 = clock();
+    // Rcpp::Rcout << "part4: " << double(t1 - t2) / CLOCKS_PER_SEC << " secs.\n";
 
     beta.makeCompressed();
 
