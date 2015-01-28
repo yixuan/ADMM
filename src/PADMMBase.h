@@ -48,10 +48,9 @@ class PADMMBase_Worker
 protected:
     typedef Eigen::VectorXd VectorXd;
     typedef Eigen::MatrixXd MatrixXd;
-    typedef Eigen::Ref<const MatrixXd> RefMat;
+    typedef Eigen::Map<const MatrixXd> MapMat;
 
-    const RefMat datX;       // (sub)data matrix sent to this worker
-    const double *datX_ptr;
+    const MapMat datX;       // (sub)data matrix sent to this worker
     int dim_main;            // length of x_i
     int dim_dual;            // length of A_i * x_i and z
 
@@ -79,13 +78,13 @@ protected:
     virtual void rho_changed_action() {}
 
 public:
-    PADMMBase_Worker(const RefMat &datX_,
-                     const double *datX_ptr_,
+    PADMMBase_Worker(const double *datX_ptr_,
+                     int X_rows_, int X_cols_,
                      const VectorXd &dual_y_,
                      const VectorXd &resid_primal_vec_,
                      bool use_BLAS_) :
-        datX(datX_), datX_ptr(datX_ptr_),
-        dim_main(datX_.cols()), dim_dual(datX_.rows()),
+        datX(datX_ptr_, X_rows_, X_cols_),
+        dim_main(X_cols_), dim_dual(X_rows_),
         main_x(dim_main), Ax(dim_dual), aux_z(dim_dual),
         dual_y(&dual_y_), resid_primal_vec(&resid_primal_vec_),
         use_BLAS(use_BLAS_)
@@ -118,7 +117,7 @@ public:
         VectorXd tmp(dim_main);
         if(use_BLAS)
         {
-            BLAStprod(tmp, 1.0, datX_ptr, dim_dual, dim_main, dual);
+            BLAStprod(tmp, 1.0, datX.data(), dim_dual, dim_main, dual);
         }
         else
         {
