@@ -30,7 +30,7 @@ private:
     double lambda;                // L1 penalty
 
     int active_set_niter;
-    int active_set_save;
+    SparseVector active_set_save;
 
     VectorXd cache_Ax;            // cache Ax
     
@@ -86,6 +86,26 @@ private:
                 iter.valueRef() = 0.0;
             }
         }
+
+        res.prune(0.0);
+    }
+
+    static bool active_set_smaller(SparseVector &oldset, SparseVector &newset)
+    {
+        int n_new = newset.nonZeros();
+        int n_old = oldset.nonZeros();
+
+        if(n_new > n_old)
+            return false;
+
+        if(n_new == 0)
+            return true;
+
+        std::vector<int> v(n_new, -1);
+        std::set_difference(newset.innerIndexPtr(), newset.innerIndexPtr() + n_new,
+                            oldset.innerIndexPtr(), oldset.innerIndexPtr() + n_old,
+                            v.begin());
+        return v[0] == -1;
     }
     
     virtual void next_x(SparseVector &res)
@@ -127,18 +147,17 @@ private:
 
             vec += main_x;
             soft_threshold(res, vec, lambda / (rho * gamma));
-
-            #if ADMM_PROFILE > 1
-            Rcpp::Rcout << "# non-zero coefs: " << res.nonZeros() << std::endl;
-            #endif
         }
+
+        #if ADMM_PROFILE > 1
+        Rcpp::Rcout << "# non-zero coefs: " << res.nonZeros() << std::endl;
+        #endif
         
-        
-        if(res.nonZeros() == active_set_save)
+        if(active_set_smaller(active_set_save, res))
             active_set_niter++;
         else
             active_set_niter = 0;
-        active_set_save = res.nonZeros();
+        active_set_save = res;
     }
     virtual void next_z(VectorXd &res)
     {
@@ -162,6 +181,7 @@ public:
                  eps_abs_, eps_rel_),
         datX(&datX_), datY(&datY_),
         sprad(sprad_),
+        active_set_save(1),
         cache_Ax(dim_dual)
     {
         cache_Ax.setZero();
@@ -182,7 +202,7 @@ public:
         resid_primal = 9999;
         resid_dual = 9999;
         active_set_niter = 0;
-        active_set_save = 0;
+        active_set_save.setZero();
 
         rho_changed_action();
     }
@@ -196,7 +216,7 @@ public:
         resid_primal = 9999;
         resid_dual = 9999;
         active_set_niter = 0;
-        active_set_save = 0;
+        active_set_save.setZero();
     }
 
     static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
