@@ -105,14 +105,14 @@ private:
         std::set_difference(newset.innerIndexPtr(), newset.innerIndexPtr() + n_new,
                             oldset.innerIndexPtr(), oldset.innerIndexPtr() + n_old,
                             v.begin());
+
         return v[0] == -1;
     }
     
     virtual void next_x(SparseVector &res)
     {
-        if(active_set_niter >= 10)
+        if(active_set_niter >= 5)
         {
-
             #if ADMM_PROFILE > 1
             clock_t t1, t2;
             t1 = clock();
@@ -125,7 +125,7 @@ private:
             Rcpp::Rcout << "active set update: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
             #endif
 
-            if(active_set_niter >= 100)
+            if(active_set_niter >= 50)
                 active_set_niter = 0;
         }
         else
