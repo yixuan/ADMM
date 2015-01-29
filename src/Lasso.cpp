@@ -22,18 +22,16 @@ typedef Eigen::Map<ArrayXd>  MapArray;
 typedef Eigen::SparseVector<double> SpVec;
 typedef Eigen::SparseMatrix<double> SpMat;
 
-// calculating the spectral radius of X'X, i.e., the largest eigenvalue
+// calculating the spectral radius of X'X,
+// in this case it is the largest eigenvalue of X'X
 inline double max_eigenvalue(const MatrixXd &X)
 {
-    NumericMatrix x = wrap(X);
-    Environment rARPACK = Environment::namespace_env("rARPACK");
-    Function svds = rARPACK["svds"];
-    IntegerVector k = IntegerVector::create(1);
-    IntegerVector nu = IntegerVector::create(0);
-    IntegerVector nv = nu;
-    List res = svds(x, k, nu, nv);
-    double sprad = as<double>(res["d"]);
-    return sprad * sprad;
+    NumericMatrix mat = wrap(X);
+
+    Environment ADMM = Environment::namespace_env("ADMM");
+    Function spectral_radius = ADMM[".spectral_radius"];
+
+    return as<double>(spectral_radius(mat));
 }
 
 inline void write_beta_matrix(SpMat &betas, int col, double beta0, SpVec &coef)

@@ -1,3 +1,12 @@
+# calculate the spectral radius of x'x
+# in this case it is the largest eigenvalue of x'x,
+# and also the square of the largest singular value of x
+.spectral_radius = function(x)
+{
+    svds(x, k = 1, nu = 0, nv = 0,
+         opts = list(ncv = 5, tol = 1.0, maxitr = 100))$d^2
+}
+
 admm_lasso = function(x, y, lambda = NULL,
                       nlambda = 100,
                       lambda_min_ratio = ifelse(nrow(x) < ncol(x), 0.01, 0.0001),
