@@ -3,7 +3,8 @@
 
 #include <RcppEigen.h>
 #include <R_ext/BLAS.h>
-// #include <ctime>
+
+#define ADMM_PROFILE 2
 
 // res = alpha * mat * vec
 inline void BLASprod(Eigen::VectorXd &res, double alpha, const double *mat,
@@ -229,9 +230,9 @@ public:
         eps_dual = compute_eps_dual();
         update_rho();
 
-#ifdef _OPENMP
+        #ifdef _OPENMP
         #pragma omp parallel for schedule(dynamic)
-#endif
+        #endif
         for(int i = 0; i < n_comp; i++)
         {
             worker[i]->update_rho(rho);
@@ -264,9 +265,10 @@ public:
         
         // dual residual vector = A_i * x_i - Ax_bar + z_bar
         double resid_dual_collector = 0.0;
-#ifdef _OPENMP
+
+        #ifdef _OPENMP
         #pragma omp parallel for schedule(dynamic) reduction(+:resid_dual_collector)
-#endif
+        #endif
         for(int i = 0; i < n_comp; i++)
         {
             worker[i]->update_z();
@@ -290,17 +292,21 @@ public:
                (resid_dual < eps_dual);
     }
 
-    virtual int solve(int maxit)
+    virtual int solve0(int maxit)
     {
         int niter = 0;
         double resid_dual_collector = 0.0;
         double Aty_norm_collector = 0.0;
 
+        #ifdef _OPENMP
         #pragma omp parallel
         {
+        #endif
             for(int iter = 0; iter < maxit; iter++)
             {
+                #ifdef _OPENMP
                 #pragma omp for schedule(dynamic) reduction(+:Aty_norm_collector)
+                #endif
                 for(int i = 0; i < n_comp; i++)
                 {
                     worker[i]->update_rho(rho);
@@ -308,8 +314,11 @@ public:
                     Aty_norm_collector += worker[i]->squared_Aty_norm();
                 }
 
+                #ifdef _OPENMP
                 #pragma omp master
                 {
+                #endif
+                    
                     eps_primal = compute_eps_primal();
                     eps_dual = sqrt(Aty_norm_collector) * eps_rel + sqrt(double(dim_main)) * eps_abs;
 
@@ -336,61 +345,100 @@ public:
                     dual_y.noalias() += rho * resid_primal_vec;
 
                     resid_dual_collector = 0.0;
+
+                #ifdef _OPENMP
                 }
                 #pragma omp barrier
+                #endif
 
                 // dual residual vector = A_i * x_i - Ax_bar + z_bar
+                #ifdef _OPENMP
                 #pragma omp for schedule(dynamic) reduction(+:resid_dual_collector)
+                #endif
                 for(int i = 0; i < n_comp; i++)
                 {
                     worker[i]->update_z();
                     resid_dual_collector += worker[i]->squared_resid_dual();
                 }
 
+                #ifdef _OPENMP
                 #pragma omp master
                 {
+                #endif
+
                     resid_dual = sqrt(resid_dual_collector) * rho;
                     update_rho();
                     Aty_norm_collector = 0.0;
+
+                #ifdef _OPENMP
                 }
                 #pragma omp barrier
+                #endif
 
                 if(converged())
                 {
+                    #ifdef _OPENMP
                     #pragma omp master
                     {
+                    #endif
+
                         niter = iter + 1;
+
+                    #ifdef _OPENMP
                     }
+                    #endif
                     break;
                 }
             }
+        #ifdef _OPENMP
         }
+        #endif
             
         return niter;
     }
 
-    virtual int solve0(int maxit)
+    virtual int solve(int maxit)
     {
         int i;
-        // double tx = 0, tz = 0, ty = 0;
-        // clock_t t1, t2;
+
+        #if ADMM_PROFILE > 1
+        double tx = 0, ty = 0;
+        clock_t t1, t2;
+        #endif
+
         for(i = 0; i < maxit; i++)
         {
-            // t1 = clock();
+            #if ADMM_PROFILE > 1
+            t1 = clock();
+            #endif
+
             update_x();
-            // t2 = clock();
-            // tx += double(t2 - t1) / CLOCKS_PER_SEC;
+
+            #if ADMM_PROFILE > 1
+            t2 = clock();
+            Rcpp::Rcout << "iteration " << i << ", x update: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
+            tx += double(t2 - t1) / CLOCKS_PER_SEC;
+            #endif
+
             update_y();
-            // t1 = clock();
-            // ty += double(t1 - t2) / CLOCKS_PER_SEC;
+
+            #if ADMM_PROFILE > 1
+            t1 = clock();
+            Rcpp::Rcout << "iteration " << i << ", y update: " << double(t1 - t2) / CLOCKS_PER_SEC << " secs\n";
+            ty += double(t1 - t2) / CLOCKS_PER_SEC;
+            #endif
 
             // debuginfo();
             if(converged())
                 break;
         }
-        // Rcpp::Rcout << "time - x: " << tx << " secs\n";
-        // Rcpp::Rcout << "time - y: " << ty << " secs\n";
-        // Rcpp::Rcout << "time - x + y: " << tx + ty << " secs\n";
+
+        #if ADMM_PROFILE > 1
+        Rcpp::Rcout << "x total: " << tx << " secs\n";
+        Rcpp::Rcout << "y total: " << ty << " secs\n";
+        Rcpp::Rcout << "x + y total: " << tx + ty << " secs\n";
+        #endif
+
         return i + 1;
     }
 
