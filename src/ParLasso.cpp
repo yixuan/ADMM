@@ -43,6 +43,11 @@ RcppExport SEXP admm_parlasso(SEXP x_, SEXP y_, SEXP lambda_,
 {
 BEGIN_RCPP
 
+#if ADMM_PROFILE > 0
+    clock_t t1, t2;
+    t1 = clock();
+#endif
+
     MatrixXd datX(as<MatrixXd>(x_));
     VectorXd datY(as<VectorXd>(y_));
     
@@ -63,8 +68,19 @@ BEGIN_RCPP
 
     bool standardize = as<bool>(standardize_);
     bool intercept = as<bool>(intercept_);
+
+#if ADMM_PROFILE > 0
+    t2 = clock();
+    Rcpp::Rcout << "part1: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs.\n";
+#endif
+
     DataStd datstd(n, p, standardize, intercept);
     datstd.standardize(datX, datY);
+
+#if ADMM_PROFILE > 0
+    t1 = clock();
+    Rcpp::Rcout << "part2: " << double(t1 - t2) / CLOCKS_PER_SEC << " secs.\n";
+#endif
 
     int nthread = as<int>(nthread_);
     bool use_BLAS = as<bool>(use_BLAS_);
@@ -73,6 +89,12 @@ BEGIN_RCPP
 #endif
 
     PADMMLasso_Master solver(datX, datY, nthread, use_BLAS, eps_abs, eps_rel);
+    
+#if ADMM_PROFILE > 0
+    t2 = clock();
+    Rcpp::Rcout << "part3: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs.\n";
+#endif
+
     if(nlambda < 1)
     {
         double lmax = solver.lambda_max() / n * datstd.get_scaleY();
@@ -102,6 +124,11 @@ BEGIN_RCPP
         datstd.recover(beta0, res);
         write_beta_matrix(beta, i, beta0, res);
     }
+
+#if ADMM_PROFILE > 0
+    t1 = clock();
+    Rcpp::Rcout << "part4: " << double(t1 - t2) / CLOCKS_PER_SEC << " secs.\n";
+#endif
 
     beta.makeCompressed();
 
