@@ -115,6 +115,7 @@ public:
         next_z(newz);
 
         VectorXd dual = newz - aux_z;
+        /*
         VectorXd tmp(dim_main);
         if(use_BLAS)
         {
@@ -125,6 +126,12 @@ public:
             tmp.noalias() = datX.transpose() * dual;
         }
         comp_squared_resid_dual = tmp.squaredNorm();
+        */
+
+        // we calculate ||newz - oldz||_2 and ||y||_2 instead of
+        // ||A'(newz - oldz)||_2 and ||A'y||_2
+        // to save a lot of computation
+        comp_squared_resid_dual = dual.squaredNorm();
 
         aux_z.swap(newz);
     }
@@ -183,6 +190,7 @@ protected:
     // calculating eps_dual
     virtual double compute_eps_dual()
     {
+        /*
         VectorXd Aty(dim_main);
         if(use_BLAS)
         {
@@ -194,6 +202,12 @@ protected:
         }
         
         return Aty.norm() * eps_rel + sqrt(double(dim_main)) * eps_abs;
+        */
+
+        // we calculate ||newz - oldz||_2 and ||y||_2 instead of
+        // ||A'(newz - oldz)||_2 and ||A'y||_2
+        // to save a lot of computation
+        return dual_y.norm() * eps_rel + sqrt(double(dim_dual)) * eps_abs;
     }
     // increase or decrease rho in iterations
     virtual void update_rho()
@@ -318,7 +332,7 @@ public:
                 #pragma omp master
                 {
                 #endif
-                    
+
                     eps_primal = compute_eps_primal();
                     eps_dual = sqrt(Aty_norm_collector) * eps_rel + sqrt(double(dim_main)) * eps_abs;
 
