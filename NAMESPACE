@@ -1,7 +1,7 @@
 useDynLib(ADMM)
 import(methods)
 import(Rcpp)
-import(rARPACK)
+importFrom(rARPACK, svds)
 importClassesFrom(Matrix, dgCMatrix)
 
 export(admm_lasso)
