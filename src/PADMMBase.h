@@ -4,7 +4,7 @@
 #include <RcppEigen.h>
 #include <R_ext/BLAS.h>
 
-#define ADMM_PROFILE 2
+// #define ADMM_PROFILE 1
 
 // res = alpha * mat * vec
 inline void BLASprod(Eigen::VectorXd &res, double alpha, const double *mat,
@@ -207,7 +207,7 @@ protected:
         // we calculate ||newz - oldz||_2 and ||y||_2 instead of
         // ||A'(newz - oldz)||_2 and ||A'y||_2
         // to save a lot of computation
-        return dual_y.norm() * eps_rel + sqrt(double(dim_dual)) * eps_abs;
+        return dual_y.norm() * sqrt(double(n_comp)) * eps_rel + sqrt(double(dim_dual)) * eps_abs;
     }
     // increase or decrease rho in iterations
     virtual void update_rho()
