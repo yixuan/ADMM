@@ -2,7 +2,8 @@
 #define ADMMBASE_H
 
 #include <RcppEigen.h>
-// #include <ctime>
+
+// #define ADMM_PROFILE 2
 
 // General problem setting
 //   minimize f(x) + g(z)
@@ -63,7 +64,19 @@ protected:
     virtual double compute_eps_dual()
     {
         VectorXd yres(dim_main);
+
+        #if ADMM_PROFILE > 1
+        clock_t t1, t2;
+        t1 = clock();
+        #endif
+
         At_mult(yres, dual_y);
+
+        #if ADMM_PROFILE > 1
+        t2 = clock();
+        Rcpp::Rcout << "matrix product in computing eps_dual: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
+        #endif
+
         return yres.norm() * eps_rel + sqrt(double(dim_main)) * eps_abs;
     }
     // increase or decrease rho in iterations
@@ -108,8 +121,20 @@ public:
         VecTypeZ zdiff = newz - aux_z;
         VectorXd tmp(dim_dual);
         B_mult(tmp, zdiff);
-        VectorXd dual(dim_main);
+        VectorXd dual;
+
+        #if ADMM_PROFILE > 1
+        clock_t t1, t2;
+        t1 = clock();
+        #endif
+
         At_mult(dual, tmp);
+
+        #if ADMM_PROFILE > 1
+        t2 = clock();
+        Rcpp::Rcout << "matrix product in z update: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
+        #endif
+
         resid_dual = rho * dual.norm();
 
         aux_z.swap(newz);
