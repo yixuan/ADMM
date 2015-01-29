@@ -3,8 +3,6 @@
 
 #include "ADMMBase.h"
 
-// #define ADMM_PROFILE 1
-
 // minimize  1/2 * ||y - X * beta||^2 + lambda * ||beta||_1
 //
 // In ADMM form,
@@ -42,7 +40,17 @@ private:
     }
     virtual void At_mult(VectorXd &res, VectorXd &y) // y -> A'y
     {
-        res = (*datX).transpose() * y;
+        // The correct operation should be the line below
+        //     res = (*datX).transpose() * y;
+        // However, it is too expensive to calculate
+        // A'y (in function compute_eps_dual())
+        // and A'(newz - oldz) (in function update_z())
+        // in every iteration.
+        // Instead, we simply use ||newz - oldz||_2
+        // and ||y||_2 to calculate dual residual and
+        // eps_dual.
+        // In this case, At_mult will be an identity transformation.
+        res = y;
     }
     virtual void B_mult (VectorXd &res, VectorXd &z) // z -> Bz
     {
@@ -134,18 +142,7 @@ private:
     }
     virtual void next_z(VectorXd &res)
     {
-        #if ADMM_PROFILE > 1
-        clock_t t1, t2;
-        t1 = clock();
-        #endif
-
         cache_Ax = (*datX) * main_x;
-        
-        #if ADMM_PROFILE > 1
-        t2 = clock();
-        Rcpp::Rcout << "matrix product in z update: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
-        #endif
-
         res.noalias() = ((*datY) + dual_y + rho * cache_Ax) / (-1 - rho);
     }
     virtual void rho_changed_action() {}
