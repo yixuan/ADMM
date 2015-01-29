@@ -15,30 +15,109 @@ private:
     double lambda; // L1 penalty parameter
     double sprad;  // spectral radius of A_i'A_i
 
+    int active_set_niter;
+    SparseVector active_set_save;
+
+    virtual void active_set_update(SparseVector &res)
+    {
+        double gamma = 2 * rho + sprad;
+        double penalty = lambda / (rho * gamma);
+        VectorXd vec = ((*dual_y) / rho + (*resid_primal_vec)) / gamma;
+        res = main_x;
+
+        for(SparseVector::InnerIterator iter(res); iter; ++iter)
+        {
+            double val = iter.value() - vec.dot(datX.col(iter.index()));
+
+            if(val > penalty)
+            {
+                iter.valueRef() = val - penalty;
+            }
+            else if(val < -penalty)
+            {
+                iter.valueRef() = val + penalty;
+            }
+            else
+            {
+                iter.valueRef() = 0.0;
+            }
+        }
+
+        res.prune(0.0);
+    }
+
+    static bool active_set_smaller(SparseVector &oldset, SparseVector &newset)
+    {
+        int n_new = newset.nonZeros();
+        int n_old = oldset.nonZeros();
+
+        if(n_new > n_old)
+            return false;
+
+        if(n_new == 0)
+            return true;
+
+        std::vector<int> v(n_new, -1);
+        std::set_difference(newset.innerIndexPtr(), newset.innerIndexPtr() + n_new,
+                            oldset.innerIndexPtr(), oldset.innerIndexPtr() + n_old,
+                            v.begin());
+
+        return v[0] == -1;
+    }
+
     // res = x in next iteration
     virtual void next_x(SparseVector &res)
     {
-        double gamma = 2 * rho + sprad;
-        VectorXd tmp = (*dual_y) / rho + (*resid_primal_vec);
-        VectorXd vec(dim_main);
-        if(use_BLAS)
+        if(active_set_niter >= 5)
         {
-            BLAStprod(vec, -1.0/gamma, datX.data(), dim_dual, dim_main, tmp);
+            active_set_update(res);
+            if(active_set_niter >= 50)
+                active_set_niter = 0;
         }
         else
         {
-            vec.noalias() = -datX.transpose() * tmp / gamma;
+            double gamma = 2 * rho + sprad;
+            VectorXd tmp = (*dual_y) / rho + (*resid_primal_vec);
+            VectorXd vec(dim_main);
+            if(use_BLAS)
+            {
+                BLAStprod(vec, -1.0/gamma, datX.data(), dim_dual, dim_main, tmp);
+            }
+            else
+            {
+                vec.noalias() = -datX.transpose() * tmp / gamma;
+            }
+            vec += main_x;
+            soft_threshold(res, vec, lambda / (rho * gamma));
+
+            if(active_set_smaller(active_set_save, res))
+                active_set_niter++;
+            else
+                active_set_niter = 0;
+            active_set_save = res;
         }
-        vec += main_x;
-        soft_threshold(res, vec, lambda / (rho * gamma));
     }
+
+    // calculating the spectral radius of X'X
+    // in this case it is the largest eigenvalue of X'X
+    static double spectral_radius(const MapMat &X)
+    {
+        Rcpp::NumericMatrix mat = Rcpp::wrap(X);
+    
+        Rcpp::Environment ADMM = Rcpp::Environment::namespace_env("ADMM");
+        Rcpp::Function spectral_radius = ADMM[".spectral_radius"];
+    
+        return Rcpp::as<double>(spectral_radius(mat));
+    }
+
 public:
     PADMMLasso_Worker(const double *datX_ptr_,
                       int X_rows_, int X_cols_,
                       const VectorXd &dual_y_,
                       const VectorXd &resid_primal_vec_,
                       bool use_BLAS_) :
-        PADMMBase_Worker(datX_ptr_, X_rows_, X_cols_, dual_y_, resid_primal_vec_, use_BLAS_)
+        PADMMBase_Worker(datX_ptr_, X_rows_, X_cols_, dual_y_, resid_primal_vec_, use_BLAS_),
+        active_set_save(1)
     {
         sprad = spectral_radius(datX);
     }
@@ -55,73 +134,18 @@ public:
         aux_z.setZero();
         lambda = lambda_;
         rho = rho_;
+        active_set_niter = 0;
+        active_set_save.setZero();
 
         rho_changed_action();
     }
     // when computing for the next lambda, we can use the
     // current main_x, aux_z, dual_y and rho as initial values
-    virtual void init_warm(double lambda_) { lambda = lambda_; }
-
-    // calculating the spectral radius of X'X, i.e., the largest eigenvalue
-    virtual double spectral_radius(const MapMat &X)
+    virtual void init_warm(double lambda_)
     {
-        double sprad = 0.0;
-    
-        int n = X.rows();
-        int p = X.cols();
-        bool thinX = n > p;
-        int dim = std::min(n, p);
-
-        VectorXd evec(dim);
-        VectorXd b(dim);
-        VectorXd tmp(std::max(n, p));
-        if(thinX)
-        {
-            tmp.noalias() = X * X.row(0);
-            evec.noalias() = X.transpose() * tmp;
-        }
-        else
-        {
-            tmp.noalias() = X.transpose() * X.col(0);
-            evec.noalias() = X * tmp;
-        }
-
-        for(int i = 0; i < 100; i++)
-        {
-            b = evec.normalized();
-            if(thinX)
-            {
-                if(use_BLAS)
-                {
-                    BLASprod(tmp, 1.0, X.data(), n, p, b);
-                    BLAStprod(evec, 1.0, X.data(), n, p, tmp);
-                }
-                else
-                {
-                    tmp.noalias() = X * b;
-                    evec.noalias() = X.transpose() * tmp;
-                }
-                
-            }
-            else
-            {
-                if(use_BLAS)
-                {
-                    BLAStprod(tmp, 1.0, X.data(), n, p, b);
-                    BLASprod(evec, 1.0, X.data(), n, p, tmp);
-                }
-                else
-                {
-                    tmp.noalias() = X.transpose() * b;
-                    evec.noalias() = X * tmp;
-                }
-            }
-            sprad = b.dot(evec);
-            if((evec - sprad * b).norm() < 0.001 * sprad)
-                break;
-        }
-
-        return sprad;
+        lambda = lambda_;
+        active_set_niter = 0;
+        active_set_save.setZero();
     }
 
     static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
@@ -167,16 +191,19 @@ public:
                       int nthread_, bool use_BLAS_,
                       double eps_abs_ = 1e-6,
                       double eps_rel_ = 1e-6) :
-        PADMMBase_Master(datX_, nthread_, eps_abs_, eps_rel_),
+        PADMMBase_Master(datX_, 2 * nthread_, eps_abs_, eps_rel_),
         datY(&datY_)
     {
         int chunk_size = dim_main / n_comp;
         int last_size = chunk_size + dim_main % n_comp;
         double avg_sprad_collector = 0.0;
 
+// we can no longer parallelize this since the constructor will call an R function
+/*
 #ifdef _OPENMP
         #pragma omp parallel for schedule(dynamic) reduction(+:avg_sprad_collector)
 #endif
+*/
         for(int i = 0; i < n_comp; i++)
         {
             if(i < n_comp - 1)
