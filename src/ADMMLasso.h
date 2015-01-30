@@ -24,24 +24,25 @@ private:
     typedef Eigen::ArrayXd ArrayXd;
     typedef Eigen::SparseVector<double> SparseVector;
 
-    const MatrixXd *datX;         // data matrix
-    const VectorXd *datY;         // response vector
+    const MatrixXd *datX;         // pointer to data matrix
+    const VectorXd *datY;         // pointer response vector
     double sprad;                 // spectral radius of X'X
     double lambda;                // L1 penalty
+    double lambda0;               // minimum lambda to make coefficients all zero
 
-    int active_set_niter;
-    SparseVector active_set_save;
+    int active_set_niter;         // counter for fast active set update
+    SparseVector active_set_save; // save the active set in previous iteration
 
     VectorXd cache_Ax;            // cache Ax
     
     virtual void A_mult(VectorXd &res, SparseVector &x) // x -> Ax
     {
-        res = (*datX) * x;
+        res.noalias() = (*datX) * x;
     }
     virtual void At_mult(VectorXd &res, VectorXd &y) // y -> A'y
     {
         // The correct operation should be the line below
-        //     res = (*datX).transpose() * y;
+        //     res.noalias() = (*datX).transpose() * y;
         // However, it is too expensive to calculate
         // A'y (in function compute_eps_dual())
         // and A'(newz - oldz) (in function update_z())
@@ -50,11 +51,11 @@ private:
         // and ||y||_2 to calculate dual residual and
         // eps_dual.
         // In this case, At_mult will be an identity transformation.
-        res = y;
+        res.swap(y);
     }
     virtual void B_mult (VectorXd &res, VectorXd &z) // z -> Bz
     {
-        res = z;
+        res.swap(z);
     }  
     virtual double c_norm() { return 0.0; } // ||c||_2
     virtual void next_residual(VectorXd &res)
@@ -62,34 +63,8 @@ private:
         res.noalias() = cache_Ax + aux_z;
     }
 
-    virtual void active_set_update(SparseVector &res)
-    {
-        double gamma = 2 * rho + sprad;
-        double penalty = lambda / (rho * gamma);
-        VectorXd vec = (cache_Ax + aux_z + dual_y / rho) / gamma;
-        res = main_x;
-
-        for(SparseVector::InnerIterator iter(res); iter; ++iter)
-        {
-            double val = iter.value() - vec.dot((*datX).col(iter.index()));
-
-            if(val > penalty)
-            {
-                iter.valueRef() = val - penalty;
-            }
-            else if(val < -penalty)
-            {
-                iter.valueRef() = val + penalty;
-            }
-            else
-            {
-                iter.valueRef() = 0.0;
-            }
-        }
-
-        res.prune(0.0);
-    }
-
+    // whether the new active set (indices of non-zero coefficients)
+    // is contained in the previous one
     static bool active_set_smaller(SparseVector &oldset, SparseVector &newset)
     {
         int n_new = newset.nonZeros();
@@ -107,6 +82,43 @@ private:
                             v.begin());
 
         return v[0] == -1;
+    }
+
+    static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
+    {
+        res.setZero();
+        res.reserve(vec.size() / 2);
+
+        double *ptr = vec.data();
+        for(int i = 0; i < vec.size(); i++)
+        {
+            if(ptr[i] > penalty)
+                res.insertBack(i) = ptr[i] - penalty;
+            else if(ptr[i] < -penalty)
+                res.insertBack(i) = ptr[i] + penalty;
+        }
+    }
+
+    virtual void active_set_update(SparseVector &res)
+    {
+        double gamma = 2 * rho + sprad;
+        double penalty = lambda / (rho * gamma);
+        VectorXd vec = (cache_Ax + aux_z + dual_y / rho) / gamma;
+        res = main_x;
+
+        for(SparseVector::InnerIterator iter(res); iter; ++iter)
+        {
+            double val = iter.value() - vec.dot((*datX).col(iter.index()));
+
+            if(val > penalty)
+                iter.valueRef() = val - penalty;
+            else if(val < -penalty)
+                iter.valueRef() = val + penalty;
+            else
+                iter.valueRef() = 0.0;
+        }
+
+        res.prune(0.0);
     }
     
     virtual void next_x(SparseVector &res)
@@ -157,6 +169,7 @@ private:
             active_set_niter++;
         else
             active_set_niter = 0;
+
         active_set_save = res;
     }
     virtual void next_z(VectorXd &res)
@@ -165,7 +178,7 @@ private:
         res.noalias() = ((*datY) + dual_y + rho * cache_Ax) / (-1 - rho);
     }
     virtual void rho_changed_action() {}
-    // calculating eps_primal
+    // a faster version compared to the base implementation
     virtual double compute_eps_primal()
     {
         double r = std::max(cache_Ax.norm(), aux_z.norm());
@@ -184,15 +197,16 @@ public:
         active_set_save(1),
         cache_Ax(dim_dual)
     {
-        cache_Ax.setZero();
+        lambda0 = ((*datX).transpose() * (*datY)).array().abs().maxCoeff();
     }
 
-    virtual double lambda_max() { return ((*datX).transpose() * (*datY)).array().abs().maxCoeff(); }
+    virtual double get_lambda_zero() { return lambda0; }
 
     // init() is a cold start for the first lambda
     virtual void init(double lambda_, double rho_)
     {
         main_x.setZero();
+        cache_Ax.setZero();
         aux_z.setZero();
         dual_y.setZero();
         lambda = lambda_;
@@ -217,24 +231,6 @@ public:
         resid_dual = 9999;
         active_set_niter = 0;
         active_set_save.setZero();
-    }
-
-    static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
-    {
-        res.reserve(vec.size() / 2);
-
-        double *ptr = vec.data();
-        for(int i = 0; i < vec.size(); i++)
-        {
-            if(ptr[i] > penalty)
-            {
-                res.insertBack(i) = ptr[i] - penalty;
-            }
-            else if(ptr[i] < -penalty)
-            {
-                res.insertBack(i) = ptr[i] + penalty;
-            }
-        }
     }
 };
 

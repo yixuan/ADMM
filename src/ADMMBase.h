@@ -35,9 +35,9 @@ protected:
     double resid_primal;  // primal residual
     double resid_dual;    // dual residual
 
-    virtual void A_mult (VectorXd &res, VecTypeX &x) = 0;   // operation res -> Ax
-    virtual void At_mult(VectorXd &res, VectorXd &y) = 0;   // operation res -> A'y
-    virtual void B_mult (VectorXd &res, VecTypeZ &z) = 0;   // operation res -> Bz
+    virtual void A_mult (VectorXd &res, VecTypeX &x) = 0;   // operation res -> Ax, x can be overwritten
+    virtual void At_mult(VectorXd &res, VectorXd &y) = 0;   // operation res -> A'y, y can be overwritten
+    virtual void B_mult (VectorXd &res, VecTypeZ &z) = 0;   // operation res -> Bz, z can be overwritten
     virtual double c_norm() = 0;                            // L2 norm of c
 
     // res = Ax + Bz - c
@@ -52,10 +52,11 @@ protected:
     // calculating eps_primal
     virtual double compute_eps_primal()
     {
-        VectorXd xres(dim_dual);
-        VectorXd zres(dim_dual);
-        A_mult(xres, main_x);
-        B_mult(zres, aux_z);
+        VectorXd xres, zres;
+        VecTypeX xcopy = main_x;
+        VectorXd zcopy = aux_z;
+        A_mult(xres, xcopy);
+        B_mult(zres, zcopy);
         double r = std::max(xres.norm(), zres.norm());
         r = std::max(r, c_norm());
         return r * eps_rel + sqrt(double(dim_dual)) * eps_abs;
@@ -63,14 +64,14 @@ protected:
     // calculating eps_dual
     virtual double compute_eps_dual()
     {
-        VectorXd yres(dim_main);
+        VectorXd yres, ycopy = dual_y;
 
         #if ADMM_PROFILE > 1
         clock_t t1, t2;
         t1 = clock();
         #endif
 
-        At_mult(yres, dual_y);
+        At_mult(yres, ycopy);
 
         #if ADMM_PROFILE > 1
         t2 = clock();
@@ -119,7 +120,7 @@ public:
 
         // calculating A'B(newz - oldz)
         VecTypeZ zdiff = newz - aux_z;
-        VectorXd tmp(dim_dual);
+        VectorXd tmp;
         B_mult(tmp, zdiff);
         VectorXd dual;
 
