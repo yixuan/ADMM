@@ -184,33 +184,44 @@ private:
         double r = std::max(cache_Ax.norm(), aux_z.norm());
         return r * eps_rel + sqrt(double(dim_dual)) * eps_abs;
     }
+
+    // calculating the spectral radius of X'X
+    // in this case it is the largest eigenvalue of X'X
+    static double spectral_radius(const MatrixXd &X)
+    {
+        Rcpp::NumericMatrix mat = Rcpp::wrap(X);
+    
+        Rcpp::Environment ADMM = Rcpp::Environment::namespace_env("ADMM");
+        Rcpp::Function spectral_radius = ADMM[".spectral_radius"];
+    
+        return Rcpp::as<double>(spectral_radius(mat));
+    }
     
 public:
     ADMMLasso(const MatrixXd &datX_, const VectorXd &datY_,
-              double sprad_,
               double eps_abs_ = 1e-6,
               double eps_rel_ = 1e-6) :
         ADMMBase(datX_.cols(), datX_.rows(), datX_.rows(),
                  eps_abs_, eps_rel_),
         datX(&datX_), datY(&datY_),
-        sprad(sprad_),
         active_set_save(1),
         cache_Ax(dim_dual)
     {
         lambda0 = ((*datX).transpose() * (*datY)).array().abs().maxCoeff();
+        sprad = spectral_radius(datX_);
     }
 
     virtual double get_lambda_zero() { return lambda0; }
 
     // init() is a cold start for the first lambda
-    virtual void init(double lambda_, double rho_)
+    virtual void init(double lambda_, double rho_ratio_)
     {
         main_x.setZero();
         cache_Ax.setZero();
         aux_z.setZero();
         dual_y.setZero();
         lambda = lambda_;
-        rho = rho_;
+        rho = lambda_ / (rho_ratio_ * sprad);
         eps_primal = 0.0;
         eps_dual = 0.0;
         resid_primal = 9999;

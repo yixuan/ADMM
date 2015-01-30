@@ -22,18 +22,6 @@ typedef Eigen::Map<ArrayXd>  MapArray;
 typedef Eigen::SparseVector<double> SpVec;
 typedef Eigen::SparseMatrix<double> SpMat;
 
-// calculating the spectral radius of X'X,
-// in this case it is the largest eigenvalue of X'X
-inline double max_eigenvalue(const MatrixXd &X)
-{
-    NumericMatrix mat = wrap(X);
-
-    Environment ADMM = Environment::namespace_env("ADMM");
-    Function spectral_radius = ADMM[".spectral_radius"];
-
-    return as<double>(spectral_radius(mat));
-}
-
 inline void write_beta_matrix(SpMat &betas, int col, double beta0, SpVec &coef)
 {
     betas.insert(0, col) = beta0;
@@ -89,18 +77,17 @@ BEGIN_RCPP
     t1 = clock();
     Rcpp::Rcout << "part2: " << double(t1 - t2) / CLOCKS_PER_SEC << " secs.\n";
 #endif
-
-    double sprad = max_eigenvalue(datX);
+    
+    ADMMLasso solver(datX, datY, eps_abs, eps_rel);
 
 #if ADMM_PROFILE > 0
     t2 = clock();
     Rcpp::Rcout << "part3: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs.\n";
 #endif
     
-    ADMMLasso solver(datX, datY, sprad, eps_abs, eps_rel);
     if(nlambda < 1)
     {
-        double lmax = solver.lambda_max() / n * datstd.get_scaleY();
+        double lmax = solver.get_lambda_zero() / n * datstd.get_scaleY();
         double lmin = as<double>(lmin_ratio_) * lmax;
         lambda.setLinSpaced(as<int>(nlambda_), log(lmax), log(lmin));
         lambda = lambda.exp();
@@ -117,7 +104,7 @@ BEGIN_RCPP
     {
         ilambda = lambda[i] * n / datstd.get_scaleY();
         if(i == 0)
-            solver.init(ilambda, ilambda / (rho_ratio * sprad));
+            solver.init(ilambda, rho_ratio);
         else
             solver.init_warm(ilambda);
 
