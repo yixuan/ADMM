@@ -12,8 +12,9 @@ private:
     typedef Eigen::SparseVector<double> SparseVector;
     typedef Eigen::Map<const MatrixXd> MapMat;
     
-    double lambda; // L1 penalty parameter
-    double sprad;  // spectral radius of A_i'A_i
+    double lambda;  // L1 penalty parameter
+    double lambda0; // with this lambda, all coefficients will be zero
+    double sprad;   // spectral radius of A_i'A_i
 
     int iter_counter;
 
@@ -48,7 +49,7 @@ private:
     // res = x in next iteration
     virtual void next_x(SparseVector &res)
     {
-        if(iter_counter % 10 == 0)
+        if(iter_counter % 15 == 0 && lambda < lambda0)
         {
             double gamma = 2 * rho + sprad;
             VectorXd tmp = (*dual_y) / rho + (*resid_primal_vec);
@@ -74,7 +75,6 @@ private:
     static double spectral_radius(const MapMat &X)
     {
         Rcpp::NumericMatrix mat = Rcpp::wrap(X);
-    
         Rcpp::Environment ADMM = Rcpp::Environment::namespace_env("ADMM");
         Rcpp::Function spectral_radius = ADMM[".spectral_radius"];
     
@@ -86,8 +86,10 @@ public:
                       int X_rows_, int X_cols_,
                       const VectorXd &dual_y_,
                       const VectorXd &resid_primal_vec_,
+                      double lambda0_,
                       bool use_BLAS_) :
-        PADMMBase_Worker(datX_ptr_, X_rows_, X_cols_, dual_y_, resid_primal_vec_, use_BLAS_)
+        PADMMBase_Worker(datX_ptr_, X_rows_, X_cols_, dual_y_, resid_primal_vec_, use_BLAS_),
+        lambda0(lambda0_)
     {
         sprad = spectral_radius(datX);
     }
@@ -159,9 +161,11 @@ public:
                       int nthread_, bool use_BLAS_,
                       double eps_abs_ = 1e-6,
                       double eps_rel_ = 1e-6) :
-        PADMMBase_Master(datX_, 2 * nthread_, eps_abs_, eps_rel_),
+        PADMMBase_Master(datX_, nthread_, eps_abs_, eps_rel_),
         datY(&datY_)
     {
+        lambda0 = (datX_.transpose() * datY_).array().abs().maxCoeff();
+
         int chunk_size = dim_main / n_comp;
         int last_size = chunk_size + dim_main % n_comp;
         double avg_sprad_collector = 0.0;
@@ -178,18 +182,17 @@ public:
                 worker[i] = new PADMMLasso_Worker(
                     &datX_(0, i * chunk_size), dim_dual, chunk_size,
                     dual_y, resid_primal_vec,
-                    use_BLAS_);
+                    lambda0, use_BLAS_);
             else
                 worker[i] = new PADMMLasso_Worker(
                     &datX_(0, i * chunk_size), dim_dual, last_size,
                     dual_y, resid_primal_vec,
-                    use_BLAS_);
+                    lambda0, use_BLAS_);
 
             avg_sprad_collector += static_cast<PADMMLasso_Worker *>(worker[i])->get_spectral_radius();
         }
 
         avg_sprad = avg_sprad_collector / n_comp;
-        lambda0 = (datX_.transpose() * datY_).array().abs().maxCoeff();
     }
         
     virtual ~PADMMLasso_Master()
