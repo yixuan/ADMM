@@ -110,7 +110,19 @@ public:
         update_rho();
 
         VecTypeX newx(dim_main);
+
+        #if ADMM_PROFILE > 1
+        clock_t t1, t2;
+        t1 = clock();
+        #endif
+
         next_x(newx);
+
+        #if ADMM_PROFILE > 1
+        t2 = clock();
+        Rcpp::Rcout << "updating x: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
+        #endif
+
         main_x.swap(newx);
     }
     virtual void update_z()
