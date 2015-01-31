@@ -30,8 +30,7 @@ private:
     double lambda;                // L1 penalty
     double lambda0;               // minimum lambda to make coefficients all zero
 
-    int active_set_niter;         // counter for fast active set update
-    SparseVector active_set_save; // save the active set in previous iteration
+    int iter_counter;             // which iteration are we in?
 
     VectorXd cache_Ax;            // cache Ax
     
@@ -61,27 +60,6 @@ private:
     virtual void next_residual(VectorXd &res)
     {
         res.noalias() = cache_Ax + aux_z;
-    }
-
-    // whether the new active set (indices of non-zero coefficients)
-    // is contained in the previous one
-    static bool active_set_smaller(SparseVector &oldset, SparseVector &newset)
-    {
-        int n_new = newset.nonZeros();
-        int n_old = oldset.nonZeros();
-
-        if(n_new > n_old)
-            return false;
-
-        if(n_new == 0)
-            return true;
-
-        std::vector<int> v(n_new, -1);
-        std::set_difference(newset.innerIndexPtr(), newset.innerIndexPtr() + n_new,
-                            oldset.innerIndexPtr(), oldset.innerIndexPtr() + n_old,
-                            v.begin());
-
-        return v[0] == -1;
     }
 
     static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
@@ -123,54 +101,17 @@ private:
     
     virtual void next_x(SparseVector &res)
     {
-        if(active_set_niter >= 5)
-        {
-            #if ADMM_PROFILE > 1
-            clock_t t1, t2;
-            t1 = clock();
-            #endif
-
-            active_set_update(res);
-
-            #if ADMM_PROFILE > 1
-            t2 = clock();
-            Rcpp::Rcout << "active set update: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
-            #endif
-
-            if(active_set_niter >= 50)
-                active_set_niter = 0;
-        }
-        else
+        if(iter_counter % 10 == 0 && lambda < lambda0)
         {
             double gamma = 2 * rho + sprad;
             VectorXd vec = cache_Ax + aux_z + dual_y / rho;
-
-            #if ADMM_PROFILE > 1
-            clock_t t1, t2;
-            t1 = clock();
-            #endif
-
             vec = -(*datX).transpose() * vec / gamma;
-
-            #if ADMM_PROFILE > 1
-            t2 = clock();
-            Rcpp::Rcout << "matrix product in x update: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
-            #endif
-
             vec += main_x;
             soft_threshold(res, vec, lambda / (rho * gamma));
+        } else {
+            active_set_update(res);
         }
-
-        #if ADMM_PROFILE > 1
-        Rcpp::Rcout << "# non-zero coefs: " << res.nonZeros() << std::endl;
-        #endif
-        
-        if(active_set_smaller(active_set_save, res))
-            active_set_niter++;
-        else
-            active_set_niter = 0;
-
-        active_set_save = res;
+        iter_counter++;        
     }
     virtual void next_z(VectorXd &res)
     {
@@ -204,7 +145,6 @@ public:
         ADMMBase(datX_.cols(), datX_.rows(), datX_.rows(),
                  eps_abs_, eps_rel_),
         datX(&datX_), datY(&datY_),
-        active_set_save(1),
         cache_Ax(dim_dual)
     {
         lambda0 = ((*datX).transpose() * (*datY)).array().abs().maxCoeff();
@@ -226,8 +166,7 @@ public:
         eps_dual = 0.0;
         resid_primal = 9999;
         resid_dual = 9999;
-        active_set_niter = 0;
-        active_set_save.setZero();
+        iter_counter = 0;
 
         rho_changed_action();
     }
@@ -240,8 +179,7 @@ public:
         eps_dual = 0.0;
         resid_primal = 9999;
         resid_dual = 9999;
-        active_set_niter = 0;
-        active_set_save.setZero();
+        iter_counter = 0;
     }
 };
 
