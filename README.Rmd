@@ -17,7 +17,7 @@ library(glmnet)
 library(ADMM)
 set.seed(123)
 n <- 100
-p <- 100
+p <- 20
 m <- 5
 b <- matrix(c(runif(m), rep(0, p - m)))
 x <- matrix(rnorm(n * p, mean = 1.2, sd = 2), n, p)
@@ -76,38 +76,41 @@ plot(rho_ratio, niter)
 ```{r}
 # compute the full solution path, n > p
 set.seed(123)
-n <- 1000
-p <- 300
-m <- 10
+n <- 50000
+p <- 1000
+m <- 100
 b <- matrix(c(runif(m), rep(0, p - m)))
 x <- matrix(rnorm(n * p, sd = 2), n, p)
 y <- x %*% b + rnorm(n)
 
-system.time(res1 <- glmnet(x, y))
-system.time(res2 <- admm_lasso(x, y))
-system.time(res3 <- admm_parlasso(x, y))
-system.time(res4 <- admm_parlasso(x, y, nthread = 4))
+system.time(res1 <- glmnet(x, y, nlambda = 20))
+system.time(res2 <- admm_lasso(x, y, nlambda = 20))
+system.time(res3 <- admm_parlasso(x, y, nlambda = 20))
+
+nlam = length(res1$lambda)
+res2$niter
+range(coef(res1) - res2$beta[, 1:nlam])
+res3$niter
+range(coef(res1) - res3$beta[, 1:nlam])
 
 # p > n, single lambda
 set.seed(123)
-n <- 1000
-p <- 3000
-m <- 10
+n <- 2000
+p <- 10000
+m <- 100
 b <- matrix(c(runif(m), rep(0, p - m)))
 x <- matrix(rnorm(n * p, sd = 2), n, p)
 y <- x %*% b + rnorm(n)
 
-system.time(res1 <- coef(glmnet(x, y), s = exp(-2), exact = TRUE))
-system.time(res2 <- admm_lasso(x, y, exp(-2)))
-system.time(res3 <- admm_parlasso(x, y, exp(-2)))
-system.time(res4 <- admm_parlasso(x, y, exp(-2), nthread = 4))
+system.time(res1 <- glmnet(x, y, nlambda = 20))
+system.time(res2 <- admm_lasso(x, y, nlambda = 20))
+system.time(res3 <- admm_parlasso(x, y, nlambda = 20))
 
+nlam = length(res1$lambda)
 res2$niter
-range(as.numeric(res1) - as.numeric(res2$beta))
+range(coef(res1) - res2$beta[, 1:nlam])
 res3$niter
-range(as.numeric(res1) - as.numeric(res3$beta))
-res4$niter
-range(as.numeric(res1) - as.numeric(res4$beta))
+range(coef(res1) - res3$beta[, 1:nlam])
 ```
 
 ### rho setting
