@@ -97,7 +97,7 @@ BEGIN_RCPP
 
     if(nlambda < 1)
     {
-        double lmax = solver.lambda_max() / n * datstd.get_scaleY();
+        double lmax = solver.get_lambda_zero() / n * datstd.get_scaleY();
         double lmin = as<double>(lmin_ratio_) * lmax;
         lambda.setLinSpaced(as<int>(nlambda_), log(lmax), log(lmin));
         lambda = lambda.exp();

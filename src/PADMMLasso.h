@@ -15,8 +15,7 @@ private:
     double lambda; // L1 penalty parameter
     double sprad;  // spectral radius of A_i'A_i
 
-    int active_set_niter;
-    SparseVector active_set_save;
+    int iter_counter;
 
     virtual void active_set_update(SparseVector &res)
     {
@@ -46,35 +45,10 @@ private:
         res.prune(0.0);
     }
 
-    static bool active_set_smaller(SparseVector &oldset, SparseVector &newset)
-    {
-        int n_new = newset.nonZeros();
-        int n_old = oldset.nonZeros();
-
-        if(n_new > n_old)
-            return false;
-
-        if(n_new == 0)
-            return true;
-
-        std::vector<int> v(n_new, -1);
-        std::set_difference(newset.innerIndexPtr(), newset.innerIndexPtr() + n_new,
-                            oldset.innerIndexPtr(), oldset.innerIndexPtr() + n_old,
-                            v.begin());
-
-        return v[0] == -1;
-    }
-
     // res = x in next iteration
     virtual void next_x(SparseVector &res)
     {
-        if(active_set_niter >= 5)
-        {
-            active_set_update(res);
-            if(active_set_niter >= 50)
-                active_set_niter = 0;
-        }
-        else
+        if(iter_counter % 10 == 0)
         {
             double gamma = 2 * rho + sprad;
             VectorXd tmp = (*dual_y) / rho + (*resid_primal_vec);
@@ -89,13 +63,10 @@ private:
             }
             vec += main_x;
             soft_threshold(res, vec, lambda / (rho * gamma));
-
-            if(active_set_smaller(active_set_save, res))
-                active_set_niter++;
-            else
-                active_set_niter = 0;
-            active_set_save = res;
+        } else {
+            active_set_update(res);
         }
+        iter_counter++;        
     }
 
     // calculating the spectral radius of X'X
@@ -116,8 +87,7 @@ public:
                       const VectorXd &dual_y_,
                       const VectorXd &resid_primal_vec_,
                       bool use_BLAS_) :
-        PADMMBase_Worker(datX_ptr_, X_rows_, X_cols_, dual_y_, resid_primal_vec_, use_BLAS_),
-        active_set_save(1)
+        PADMMBase_Worker(datX_ptr_, X_rows_, X_cols_, dual_y_, resid_primal_vec_, use_BLAS_)
     {
         sprad = spectral_radius(datX);
     }
@@ -134,8 +104,7 @@ public:
         aux_z.setZero();
         lambda = lambda_;
         rho = rho_;
-        active_set_niter = 0;
-        active_set_save.setZero();
+        iter_counter = 0;
 
         rho_changed_action();
     }
@@ -144,8 +113,7 @@ public:
     virtual void init_warm(double lambda_)
     {
         lambda = lambda_;
-        active_set_niter = 0;
-        active_set_save.setZero();
+        iter_counter = 0;
     }
 
     static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
@@ -178,7 +146,7 @@ private:
 
     const VectorXd *datY;  // response vector
     double avg_sprad;      // average spectral radius of A_i' * A_i
-    double lmax;           // with this lambda, all coefficients will be zero
+    double lambda0;        // with this lambda, all coefficients will be zero
 
     virtual void next_z_bar(VectorXd &res, VectorXd &Ax_bar)
     {
@@ -221,7 +189,7 @@ public:
         }
 
         avg_sprad = avg_sprad_collector / n_comp;
-        lmax = (datX_.transpose() * datY_).array().abs().maxCoeff();
+        lambda0 = (datX_.transpose() * datY_).array().abs().maxCoeff();
     }
         
     virtual ~PADMMLasso_Master()
@@ -232,7 +200,7 @@ public:
         }
     }
 
-    virtual double lambda_max() { return lmax; }
+    virtual double get_lambda_zero() { return lambda0; }
 
     // init() is a cold start for the first lambda
     virtual void init(double lambda_, double rho_ratio_)
