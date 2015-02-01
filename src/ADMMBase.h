@@ -54,7 +54,7 @@ protected:
     {
         VectorXd xres, zres;
         VecTypeX xcopy = main_x;
-        VectorXd zcopy = aux_z;
+        VecTypeZ zcopy = aux_z;
         A_mult(xres, xcopy);
         B_mult(zres, zcopy);
         double r = std::max(xres.norm(), zres.norm());
