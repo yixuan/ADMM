@@ -6,3 +6,4 @@ importClassesFrom(Matrix, dgCMatrix)
 
 export(admm_lasso)
 export(admm_parlasso)
+export(admm_lad)
