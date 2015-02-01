@@ -125,6 +125,11 @@ private:
         double r = std::max(cache_Ax.norm(), aux_z.norm());
         return r * eps_rel + sqrt(double(dim_dual)) * eps_abs;
     }
+    // a faster version compared to the base implementation
+    virtual double compute_eps_dual()
+    {
+        return dual_y.norm() * eps_rel + sqrt(double(dim_dual)) * eps_abs;
+    }
 
     // calculating the spectral radius of X'X
     // in this case it is the largest eigenvalue of X'X
