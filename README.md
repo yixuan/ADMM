@@ -200,7 +200,7 @@ system.time(res1 <- glmnet(x, y, nlambda = 20))
 
 ```
 ##    user  system elapsed 
-##   1.784   0.085   1.868
+##   1.769   0.072   1.839
 ```
 
 ```r
@@ -209,7 +209,7 @@ system.time(res2 <- admm_lasso(x, y, nlambda = 20))
 
 ```
 ##    user  system elapsed 
-##  11.174   0.167  11.334
+##  11.350   0.170  11.511
 ```
 
 ```r
@@ -218,7 +218,7 @@ system.time(res3 <- admm_parlasso(x, y, nlambda = 20))
 
 ```
 ##    user  system elapsed 
-##  12.924   0.313   8.029
+##  12.612   0.293   7.749
 ```
 
 ```r
@@ -269,7 +269,7 @@ system.time(res1 <- glmnet(x, y, nlambda = 20))
 
 ```
 ##    user  system elapsed 
-##   0.542   0.027   0.568
+##   0.561   0.038   0.598
 ```
 
 ```r
@@ -278,7 +278,7 @@ system.time(res2 <- admm_lasso(x, y, nlambda = 20))
 
 ```
 ##    user  system elapsed 
-##   2.147   0.067   2.213
+##   2.309   0.066   2.374
 ```
 
 ```r
@@ -287,7 +287,7 @@ system.time(res3 <- admm_parlasso(x, y, nlambda = 20))
 
 ```
 ##    user  system elapsed 
-##   3.678   0.104   2.115
+##   3.592   0.104   2.072
 ```
 
 ```r
@@ -333,4 +333,138 @@ niter <- sapply(rho_ratio,
     function(r) admm_lasso(x, y, lambda, opts = list(rho_ratio = r))$niter
 )
 plot(rho_ratio, niter)
+```
+
+### LAD
+
+**LAD** (Least Absolute Deviation) minimizes $\Vert y-X\beta\Vert_1$ instead of
+$\Vert y-X\beta\Vert_2^2$ (OLS), and is equivalent to median regression.
+
+
+```r
+library(quantreg)
+```
+
+```
+## Loading required package: SparseM
+## 
+## Attaching package: 'SparseM'
+## 
+## The following object is masked from 'package:base':
+## 
+##     backsolve
+```
+
+```r
+set.seed(123)
+n <- 100
+p <- 10
+b <- runif(p)
+x <- matrix(rnorm(n * p, sd = 2), n, p)
+y <- x %*% b + rnorm(n)
+
+out_rq1 <- rq.fit(x, y)
+out_rq2 <- rq.fit(x, y, method = "fn")
+out_admm <- admm_lad(x, y, intercept = FALSE)
+
+data.frame(rq_br = out_rq1$coefficients,
+           rq_fn = out_rq2$coefficients,
+           admm = out_admm$beta[-1])
+```
+
+```
+##         rq_br      rq_fn        admm
+## 1   0.3165110  0.3165110  0.31905567
+## 2   0.7580296  0.7580296  0.76215718
+## 3   0.3455318  0.3455318  0.35382123
+## 4   0.9336074  0.9336074  0.92909558
+## 5   0.9307351  0.9307351  0.93056071
+## 6  -0.0195372 -0.0195372 -0.01383296
+## 7   0.5599899  0.5599899  0.56146853
+## 8   0.9184631  0.9184631  0.91935938
+## 9   0.4876336  0.4876336  0.48560448
+## 10  0.5094858  0.5094858  0.51009296
+```
+
+```r
+set.seed(123)
+n <- 1000
+p <- 500
+b <- runif(p)
+x <- matrix(rnorm(n * p, sd = 2), n, p)
+y <- x %*% b + rnorm(n)
+
+system.time(res1 <- rq.fit(x, y))
+```
+
+```
+##    user  system elapsed 
+##   3.047   0.003   3.047
+```
+
+```r
+system.time(res2 <- rq.fit(x, y, method = "fn"))
+```
+
+```
+##    user  system elapsed 
+##   0.834   0.001   0.834
+```
+
+```r
+system.time(res3 <- admm_lad(x, y, intercept = FALSE, opts = list(eps_rel = 1e-4)))
+```
+
+```
+##    user  system elapsed 
+##   0.466   0.000   0.465
+```
+
+```r
+range(res1$coefficients - res2$coefficients)
+```
+
+```
+## [1] -1.424183e-09  1.000354e-09
+```
+
+```r
+range(res1$coefficients - res3$beta[-1])
+```
+
+```
+## [1] -0.002917357  0.002352362
+```
+
+```r
+set.seed(123)
+n <- 5000
+p <- 1000
+b <- runif(p)
+x <- matrix(rnorm(n * p, sd = 2), n, p)
+y <- x %*% b + rnorm(n)
+
+system.time(res1 <- rq.fit(x, y, method = "fn"))
+```
+
+```
+##    user  system elapsed 
+##  22.181   0.031  22.194
+```
+
+```r
+system.time(res2 <- admm_lad(x, y, intercept = FALSE, opts = list(eps_rel = 1e-4)))
+```
+
+```
+##    user  system elapsed 
+##   7.033   0.010   7.037
+```
+
+```r
+range(res1$coefficients - res2$beta[-1])
+```
+
+```
+## [1] -0.001213326  0.001174588
 ```

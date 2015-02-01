@@ -123,3 +123,53 @@ niter <- sapply(rho_ratio,
 )
 plot(rho_ratio, niter)
 ```
+
+### LAD
+
+**LAD** (Least Absolute Deviation) minimizes $\Vert y-X\beta\Vert_1$ instead of
+$\Vert y-X\beta\Vert_2^2$ (OLS), and is equivalent to median regression.
+
+```{r}
+library(quantreg)
+set.seed(123)
+n <- 100
+p <- 10
+b <- runif(p)
+x <- matrix(rnorm(n * p, sd = 2), n, p)
+y <- x %*% b + rnorm(n)
+
+out_rq1 <- rq.fit(x, y)
+out_rq2 <- rq.fit(x, y, method = "fn")
+out_admm <- admm_lad(x, y, intercept = FALSE)
+
+data.frame(rq_br = out_rq1$coefficients,
+           rq_fn = out_rq2$coefficients,
+           admm = out_admm$beta[-1])
+
+set.seed(123)
+n <- 1000
+p <- 500
+b <- runif(p)
+x <- matrix(rnorm(n * p, sd = 2), n, p)
+y <- x %*% b + rnorm(n)
+
+system.time(res1 <- rq.fit(x, y))
+system.time(res2 <- rq.fit(x, y, method = "fn"))
+system.time(res3 <- admm_lad(x, y, intercept = FALSE, opts = list(eps_rel = 1e-4)))
+
+range(res1$coefficients - res2$coefficients)
+range(res1$coefficients - res3$beta[-1])
+
+set.seed(123)
+n <- 5000
+p <- 1000
+b <- runif(p)
+x <- matrix(rnorm(n * p, sd = 2), n, p)
+y <- x %*% b + rnorm(n)
+
+system.time(res1 <- rq.fit(x, y, method = "fn"))
+system.time(res2 <- admm_lad(x, y, intercept = FALSE, opts = list(eps_rel = 1e-4)))
+
+range(res1$coefficients - res2$beta[-1])
+
+```
