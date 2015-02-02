@@ -35,6 +35,19 @@ ADMM_Lasso$methods(
 )
 
 ADMM_Lasso$methods(
+    show = function()
+    {
+        cat("ADMM Lasso model\n\n")
+        cat(sprintf("$x: <%d x %d> matrix\n", nrow(.self$x), ncol(.self$x)))
+        cat(sprintf("$y: <%d x 1> vector\n", length(.self$y)))
+
+        fields = setdiff(names(ADMM_Lasso$fields()), c("x", "y"))
+        for(field in fields)
+            cat("$", field, ": ", .self$field(field), "\n", sep = "")
+    }
+)
+
+ADMM_Lasso$methods(
     penalty = function(lambda = NULL, nlambda = 100, lambda_min_ratio, ...)
     {
         lambda_val = sort(as.numeric(lambda), decreasing = TRUE)
