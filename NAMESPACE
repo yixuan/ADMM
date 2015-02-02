@@ -5,6 +5,5 @@ importFrom(rARPACK, svds)
 importClassesFrom(Matrix, dgCMatrix)
 
 export(admm_lasso)
-export(admm_parlasso)
 export(admm_scad)
 export(admm_lad)
