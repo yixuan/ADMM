@@ -57,9 +57,10 @@ ADMM_Lasso$methods(
         cat(sprintf("$x: <%d x %d> matrix\n", nrow(.self$x), ncol(.self$x)))
         cat(sprintf("$y: <%d x 1> vector\n", length(.self$y)))
 
-        fields = setdiff(names(ADMM_Lasso$fields()), c("x", "y"))
+        fields = setdiff(names(.refClassDef@fieldClasses), c("x", "y"))
         for(field in fields)
-            cat("$", field, ": ", .self$field(field), "\n", sep = "")
+            cat("$", field, ": ", paste(.self$field(field), collapse = " "),
+                "\n", sep = "")
     }
 )
 
