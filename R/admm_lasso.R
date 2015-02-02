@@ -220,7 +220,7 @@ ADMM_Lasso_fit$methods(
 }
 
 
-#' Fitting a Lasso model using ADMM algorithm
+#' Fitting A Lasso Model Using ADMM Algorithm
 #' 
 #' @description This function will not directly conduct the computation,
 #' but rather returns an object of class "\code{ADMM_Lasso}" that contains

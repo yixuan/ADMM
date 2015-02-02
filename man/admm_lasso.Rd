@@ -2,7 +2,7 @@
 % Please edit documentation in R/admm_lasso.R
 \name{admm_lasso}
 \alias{admm_lasso}
-\title{Fitting a Lasso model using ADMM algorithm}
+\title{Fitting A Lasso Model Using ADMM Algorithm}
 \usage{
 admm_lasso(x, y, intercept = TRUE, standardize = TRUE, ...)
 }
