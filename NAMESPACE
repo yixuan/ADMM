@@ -1,8 +1,11 @@
 useDynLib(ADMM)
 import(methods)
 import(Rcpp)
+import(ggplot2)
+
 importFrom(rARPACK, svds)
 importClassesFrom(Matrix, dgCMatrix)
+importMethodsFrom(Matrix, dim, as.matrix, coerce)
 
 export(admm_lasso)
 export(admm_scad)
