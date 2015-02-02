@@ -13,6 +13,12 @@ ADMM_Lasso = setRefClass("ADMM_Lasso",
                   rho_ratio = "numeric")
 )
 
+ADMM_Lasso_fit = setRefClass("ADMM_Lasso_fit",
+    fields = list(lambda = "numeric",
+                  beta = "dgCMatrix",
+                  niter = "integer")
+)
+
 ADMM_Lasso$methods(
     initialize = function(x, y, intercept = TRUE, standardize = TRUE, ...)
     {
@@ -111,7 +117,7 @@ ADMM_Lasso$methods(
 ADMM_Lasso$methods(
     fit = function(...)
     {
-        if(.self$nthread <= 1)
+        res = if(.self$nthread <= 1)
             .Call("admm_lasso", .self$x, .self$y, .self$lambda,
                   .self$nlambda, .self$lambda_min_ratio,
                   .self$standardize, .self$intercept,
@@ -130,6 +136,7 @@ ADMM_Lasso$methods(
                        eps_rel = .self$eps_rel,
                        rho_ratio = .self$rho_ratio),
                   PACKAGE = "ADMM")
+        do.call(ADMM_Lasso_fit, res)
     }
 )
 
