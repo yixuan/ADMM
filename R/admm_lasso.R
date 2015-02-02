@@ -218,7 +218,68 @@ ADMM_Lasso_fit$methods(
          opts = list(ncv = 5, tol = 1.0, maxitr = 100))$d^2
 }
 
-## Exported function to fit ADMM Lasso
+
+#' Fitting a Lasso model using ADMM algorithm
+#' 
+#' @description This function will not directly conduct the computation,
+#' but rather returns an object of class "\code{ADMM_Lasso}" that contains
+#' several memeber functions to actually constructs and fits the model.
+#' 
+#' Member functions that are callable from this object are listed below:
+#' 
+#' \tabular{ll}{
+#'   \code{$penalty()}  \tab Specify the penalty parameter. See section
+#'                           \strong{Setting Penalty Parameter} for details.\cr
+#'   \code{$parallel()} \tab Specify the number of threads for parallel computing.
+#'                           See section \strong{Parallel Computing} for details.\cr
+#'   \code{$opts()}     \tab Setting additional options. See section
+#'                           \strong{Additional Options} for details.\cr
+#'   \code{$fit()}      \tab Fit the model and do the actual computation.
+#'                           See section \strong{Model Fitting} for details.
+#' }
+#' 
+#' @param x The data matrix
+#' @param y The response vector
+#' @param intercept Whether to fit an intercept in the model. Default is \code{TRUE}.
+#' @param standardize Whether to standardize the explanatory variables before
+#'                    fitting the model. Default is \code{TRUE}. Fitted coefficients
+#'                    are always returned on the original scale.
+#' 
+#' @examples set.seed(123)
+#' n = 100
+#' p = 20
+#' b = runif(p)
+#' x = matrix(rnorm(n * p, mean = 1.2, sd = 2), n, p)
+#' y = 5 + c(x %*% b) + rnorm(n)
+#' 
+#' ## Directly fit the model
+#' admm_lasso(x, y)$fit()
+#' 
+#' ## Or, if you want to have more customization:
+#' model = admm_lasso(x, y)
+#' print(model)
+#' 
+#' ## Specify the lambda sequence
+#' model$penalty(nlambda = 20, lambda_min_ratio = 0.01)
+#' 
+#' ## Lower down precision for faster computation
+#' model$opts(maxit = 100, eps_rel = 0.001)
+#' 
+#' ## Use parallel computing (not necessary for this small dataset here)
+#' # model$parallel(nthread = 2)
+#' 
+#' ## Inspect the updated model setting
+#' print(model)
+#' 
+#' ## Fit the model and do the actual computation
+#' res = model$fit()
+#' res$beta
+#' 
+#' ## Create a solution path plot
+#' res$plot()
+#' 
+#' @author Yixuan Qiu <\url{http://statr.me}>
+#' @export
 admm_lasso = function(x, y, intercept = TRUE, standardize = TRUE, ...)
 {
     ADMM_Lasso(x, y, intercept, standardize, ...)
