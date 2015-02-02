@@ -1,3 +1,4 @@
+## Class to describe a Lasso model
 ADMM_Lasso = setRefClass("ADMM_Lasso",
     fields = list(x = "matrix",
                   y = "numeric",
@@ -13,12 +14,20 @@ ADMM_Lasso = setRefClass("ADMM_Lasso",
                   rho_ratio = "numeric")
 )
 
+## Class to store fitting results of Lasso model
 ADMM_Lasso_fit = setRefClass("ADMM_Lasso_fit",
     fields = list(lambda = "numeric",
                   beta = "dgCMatrix",
                   niter = "integer")
 )
 
+
+
+
+
+##### Member functions of ADMM_Lasso #####
+
+## Initialize fields including default values
 ADMM_Lasso$methods(
     initialize = function(x, y, intercept = TRUE, standardize = TRUE, ...)
     {
@@ -40,6 +49,7 @@ ADMM_Lasso$methods(
     }
 )
 
+## Print off ADMM_Lasso object
 ADMM_Lasso$methods(
     show = function()
     {
@@ -53,6 +63,7 @@ ADMM_Lasso$methods(
     }
 )
 
+## Set up penalty parameters
 ADMM_Lasso$methods(
     penalty = function(lambda = NULL, nlambda = 100, lambda_min_ratio, ...)
     {
@@ -79,6 +90,7 @@ ADMM_Lasso$methods(
     }
 )
 
+## Specify parallel computing
 ADMM_Lasso$methods(
     parallel = function(nthread = 2, ...)
     {
@@ -94,6 +106,7 @@ ADMM_Lasso$methods(
     }
 )
 
+## Specify additional parameters
 ADMM_Lasso$methods(
     opts = function(maxit = 10000, eps_abs = 1e-5, eps_rel = 1e-5,
                     rho_ratio = 0.1, ...)
@@ -114,6 +127,7 @@ ADMM_Lasso$methods(
     }
 )
 
+## Fit model and conduct the computing
 ADMM_Lasso$methods(
     fit = function(...)
     {
@@ -139,6 +153,58 @@ ADMM_Lasso$methods(
         do.call(ADMM_Lasso_fit, res)
     }
 )
+
+
+
+
+
+##### Member functions of ADMM_Lasso_fit #####
+
+## Print off ADMM_Lasso_fit object
+ADMM_Lasso_fit$methods(
+    show = function()
+    {
+        cat("ADMM Lasso fitting result\n\n")
+        cat("$lambda\n")
+        print(.self$lambda)
+        cat("\n")
+        cat("$beta\n")
+        cat(sprintf("<%d x %d> sparse matrix\n", nrow(.self$beta), ncol(.self$beta)))
+        cat("\n")
+        cat("$niter\n")
+        print(.self$niter)
+    }
+)
+
+## Print off ADMM_Lasso_fit object
+ADMM_Lasso_fit$methods(
+    plot = function()
+    {
+        nlambda = length(.self$lambda)
+        # If we only have one lambda we cannot create a path plot
+        if(nlambda < 2)
+            stop("need to have at least two lambda values")
+        
+        loglambda = log(.self$lambda)
+        # Exclude variables that have zero coefficients for all lambdas
+        rows_inc = apply(.self$beta, 1, function(x) any(x != 0))
+        # Exclude intercept
+        rows_inc[1] = FALSE
+        mat = t(as.matrix(.self$beta[rows_inc, ]))
+        nvar = ncol(mat)
+        dat = data.frame(loglambda = rep(loglambda, nvar),
+                         varid = rep(1:nvar, each = nlambda),
+                         coef = as.numeric(mat))
+        ggplot(dat, aes(x = loglambda, y = coef, color = factor(varid))) +
+            geom_line(aes(group = varid)) +
+            xlab(expression(log(lambda))) +
+            ylab("Coefficients") +
+            ggtitle("Solution path") +
+            guides(color = FALSE)
+    }
+)
+
+
 
 # calculate the spectral radius of x'x
 # in this case it is the largest eigenvalue of x'x,
