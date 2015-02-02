@@ -18,7 +18,7 @@
 // g(z) => 1/2 * ||z + b||^2
 class ADMMLasso: public ADMMBase<Eigen::SparseVector<double>, Eigen::VectorXd>
 {
-private:
+protected:
     typedef Eigen::MatrixXd MatrixXd;
     typedef Eigen::VectorXd VectorXd;
     typedef Eigen::ArrayXd ArrayXd;
