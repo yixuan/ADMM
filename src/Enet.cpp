@@ -1,4 +1,4 @@
-#include "ADMMSCAD.h"
+#include "ADMMEnet.h"
 #include "DataStd.h"
 
 using Eigen::MatrixXd;
@@ -32,10 +32,10 @@ inline void write_beta_matrix(SpMat &betas, int col, double beta0, SpVec &coef)
     }
 }
 
-RcppExport SEXP admm_scad(SEXP x_, SEXP y_, SEXP lambda_,
+RcppExport SEXP admm_enet(SEXP x_, SEXP y_, SEXP lambda_,
                           SEXP nlambda_, SEXP lmin_ratio_,
                           SEXP standardize_, SEXP intercept_,
-                          SEXP pen_a_, SEXP opts_)
+                          SEXP alpha_, SEXP opts_)
 {
 BEGIN_RCPP
 
@@ -46,7 +46,7 @@ BEGIN_RCPP
 
     MatrixXd datX(as<MatrixXd>(x_));
     VectorXd datY(as<VectorXd>(y_));
-    
+
     // In glmnet, we minimize
     //   1/(2n) * ||y - X * beta||^2 + lambda * ||beta||_1
     // which is equivalent to minimizing
@@ -55,14 +55,14 @@ BEGIN_RCPP
     int p = datX.cols();
     ArrayXd lambda(as<ArrayXd>(lambda_));
     int nlambda = lambda.size();
-    
+
     List opts(opts_);
     int maxit = as<int>(opts["maxit"]);
     double eps_abs = as<double>(opts["eps_abs"]);
     double eps_rel = as<double>(opts["eps_rel"]);
     double rho_ratio = as<double>(opts["rho_ratio"]);
 
-    double pen_a = as<double>(pen_a_);
+    double alpha = as<double>(alpha_);
 
     bool standardize = as<bool>(standardize_);
     bool intercept = as<bool>(intercept_);
@@ -79,14 +79,14 @@ BEGIN_RCPP
     t1 = clock();
     Rcpp::Rcout << "part2: " << double(t1 - t2) / CLOCKS_PER_SEC << " secs.\n";
 #endif
-    
-    ADMMSCAD solver(datX, datY, pen_a, eps_abs, eps_rel);
+
+    ADMMEnet solver(datX, datY, alpha, eps_abs, eps_rel);
 
 #if ADMM_PROFILE > 0
     t2 = clock();
     Rcpp::Rcout << "part3: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs.\n";
 #endif
-    
+
     if(nlambda < 1)
     {
         double lmax = solver.get_lambda_zero() / n * datstd.get_scaleY();
