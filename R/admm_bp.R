@@ -40,9 +40,8 @@ ADMM_BP$methods(
 
 ## Print off ADMM_BP object
 ADMM_BP$methods(
-    show = function()
+    show_common = function()
     {
-        cat("ADMM Basis Pursuit model\n\n")
         cat(sprintf("$x: <%d x %d> matrix\n", nrow(.self$x), ncol(.self$x)))
         cat(sprintf("$y: <%d x 1> vector\n", length(.self$y)))
         
@@ -50,6 +49,11 @@ ADMM_BP$methods(
         for(field in fields)
             cat("$", field, ": ", paste(.self$field(field), collapse = " "),
                 "\n", sep = "")
+    },
+    show = function()
+    {
+        cat("ADMM Basis Pursuit model\n\n")
+        show_common()
     }
 )
 
@@ -97,14 +101,18 @@ ADMM_BP$methods(
 
 ## Print off ADMM_BP_fit object
 ADMM_BP_fit$methods(
-    show = function()
+    show_common = function()
     {
-        cat("ADMM Basis Pursuit fitting result\n\n")
         cat("$beta\n")
         cat(sprintf("<%d x %d> sparse matrix\n", nrow(.self$beta), ncol(.self$beta)))
         cat("\n")
         cat("$niter\n")
         print(.self$niter)
+    }
+    show = function()
+    {
+        cat("ADMM Basis Pursuit fitting result\n\n")
+        show_common()
     }
 )
 
