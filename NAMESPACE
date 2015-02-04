@@ -8,5 +8,5 @@ importClassesFrom(Matrix, dgCMatrix)
 importMethodsFrom(Matrix, dim, as.matrix, coerce)
 
 export(admm_lasso)
-export(admm_scad)
+export(admm_enet)
 export(admm_lad)

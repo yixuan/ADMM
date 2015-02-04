@@ -1,36 +1,36 @@
-## Class to describe a SCAD model
-ADMM_SCAD = setRefClass("ADMM_SCAD",
-                        fields = list(penalty_a = "numeric"),
+## Class to describe an elastic net model
+ADMM_Enet = setRefClass("ADMM_Enet",
+                        fields = list(alpha = "numeric"),
                         contains = "ADMM_Lasso"
 )
 
-## Class to store fitting results of SCAD model
-ADMM_SCAD_fit = setRefClass("ADMM_SCAD_fit", contains = "ADMM_Lasso_fit")
+## Class to store fitting results of elastic net model
+ADMM_Enet_fit = setRefClass("ADMM_Enet_fit", contains = "ADMM_Lasso_fit")
 
 
 
 
 
-##### Member functions of ADMM_SCAD #####
+##### Member functions of ADMM_Enet #####
 
 ## Initialize fields including default values
-ADMM_SCAD$methods(
+ADMM_Enet$methods(
     initialize = function(...)
     {
-        .self$penalty_a = 3.7
+        .self$alpha = 1
         callSuper(...)
     }
 )
 
 ## Set up penalty parameters
-ADMM_SCAD$methods(
+ADMM_Enet$methods(
     penalty = function(lambda = NULL, nlambda = 100, lambda_min_ratio,
-                       penalty_a = 3.7, ...)
+                       alpha = 1, ...)
     {
-        if(penalty_a <= 2)
-            stop("penalty_a must be greater than 2")
+        if(alpha < 0 | alpha > 1)
+            stop("alpha must be within [0,1]")
         
-        .self$penalty_a = as.numeric(penalty_a)
+        .self$alpha = as.numeric(alpha)
         callSuper(lambda, nlambda, lambda_min_ratio, ...)
         
         invisible(.self)
@@ -38,19 +38,19 @@ ADMM_SCAD$methods(
 )
 
 ## Fit model and conduct the computing
-ADMM_SCAD$methods(
+ADMM_Enet$methods(
     fit = function(...)
     {
-        res = .Call("admm_scad", .self$x, .self$y, .self$lambda,
+        res = .Call("admm_enet", .self$x, .self$y, .self$lambda,
                     .self$nlambda, .self$lambda_min_ratio,
                     .self$standardize, .self$intercept,
-                    .self$penalty_a,
+                    .self$alpha,
                     list(maxit = .self$maxit,
                          eps_abs = .self$eps_abs,
                          eps_rel = .self$eps_rel,
                          rho_ratio = .self$rho_ratio),
                     PACKAGE = "ADMM")
-        do.call(ADMM_SCAD_fit, res)
+        do.call(ADMM_Enet_fit, res)
     }
 )
 
@@ -58,10 +58,10 @@ ADMM_SCAD$methods(
 
 
 
-#' Fitting A Penalized Least Squares Model With SCAD Threshold
+#' Fitting An Elastic Net Model Using ADMM Algorithm
 #' 
 #' @description This function will not directly conduct the computation,
-#' but rather returns an object of class "\code{ADMM_SCAD}" that contains
+#' but rather returns an object of class "\code{ADMM_Enet}" that contains
 #' several memeber functions to actually constructs and fits the model.
 #' 
 #' Member functions that are callable from this object are listed below:
@@ -90,14 +90,14 @@ ADMM_SCAD$methods(
 #' y = 5 + c(x %*% b) + rnorm(n)
 #' 
 #' ## Directly fit the model
-#' admm_scad(x, y)$fit()
+#' admm_enet(x, y)$penalty(alpha = 0.5)$fit()
 #' 
 #' ## Or, if you want to have more customization:
-#' model = admm_scad(x, y)
+#' model = admm_enet(x, y)
 #' print(model)
 #' 
-#' ## Specify the lambda sequence and the "a"-parameter
-#' model$penalty(nlambda = 20, lambda_min_ratio = 0.01, penalty_a = 4)
+#' ## Specify the lambda sequence and the alpha parameter
+#' model$penalty(nlambda = 20, lambda_min_ratio = 0.01, alpha = 0.5)
 #' 
 #' ## Lower down precision for faster computation
 #' model$opts(maxit = 100, eps_rel = 0.001)
@@ -114,7 +114,7 @@ ADMM_SCAD$methods(
 #' 
 #' @author Yixuan Qiu <\url{http://statr.me}>
 #' @export
-admm_scad = function(x, y, intercept = TRUE, standardize = TRUE, ...)
+admm_enet = function(x, y, intercept = TRUE, standardize = TRUE, ...)
 {
-    ADMM_SCAD(x, y, intercept, standardize, ...)
+    ADMM_Enet(x, y, intercept, standardize, ...)
 }
