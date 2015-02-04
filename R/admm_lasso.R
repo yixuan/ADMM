@@ -51,16 +51,20 @@ ADMM_Lasso$methods(
 
 ## Print off ADMM_Lasso object
 ADMM_Lasso$methods(
-    show = function()
+    show_common = function()
     {
-        cat("ADMM Lasso model\n\n")
         cat(sprintf("$x: <%d x %d> matrix\n", nrow(.self$x), ncol(.self$x)))
         cat(sprintf("$y: <%d x 1> vector\n", length(.self$y)))
-
+        
         fields = setdiff(names(.refClassDef@fieldClasses), c("x", "y"))
         for(field in fields)
             cat("$", field, ": ", paste(.self$field(field), collapse = " "),
                 "\n", sep = "")
+    },
+    show = function()
+    {
+        cat("ADMM Lasso model\n\n")
+        show_common()
     }
 )
 
@@ -163,9 +167,8 @@ ADMM_Lasso$methods(
 
 ## Print off ADMM_Lasso_fit object
 ADMM_Lasso_fit$methods(
-    show = function()
+    show_common = function()
     {
-        cat("ADMM Lasso fitting result\n\n")
         cat("$lambda\n")
         print(.self$lambda)
         cat("\n")
@@ -174,10 +177,15 @@ ADMM_Lasso_fit$methods(
         cat("\n")
         cat("$niter\n")
         print(.self$niter)
+    },
+    show = function()
+    {
+        cat("ADMM Lasso fitting result\n\n")
+        show_common()
     }
 )
 
-## Print off ADMM_Lasso_fit object
+## Plot ADMM_Lasso_fit object
 ADMM_Lasso_fit$methods(
     plot = function()
     {

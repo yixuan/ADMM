@@ -22,6 +22,15 @@ ADMM_Enet$methods(
     }
 )
 
+## Print off ADMM_Enet object
+ADMM_Enet$methods(
+    show = function()
+    {
+        cat("ADMM Elastic Net model\n\n")
+        show_common()
+    }
+)
+
 ## Set up penalty parameters
 ADMM_Enet$methods(
     penalty = function(lambda = NULL, nlambda = 100, lambda_min_ratio,
@@ -51,6 +60,21 @@ ADMM_Enet$methods(
                          rho_ratio = .self$rho_ratio),
                     PACKAGE = "ADMM")
         do.call(ADMM_Enet_fit, res)
+    }
+)
+
+
+
+
+
+##### Member functions of ADMM_Lasso_fit #####
+
+## Print off ADMM_Lasso_fit object
+ADMM_Enet_fit$methods(
+    show = function()
+    {
+        cat("ADMM Elastic Net fitting result\n\n")
+        show_common()
     }
 )
 
