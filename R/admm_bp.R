@@ -59,7 +59,7 @@ ADMM_BP$methods(
 
 ## Specify additional parameters
 ADMM_BP$methods(
-    opts = function(maxit = 10000, eps_abs = 1e-5, eps_rel = 1e-5,
+    opts = function(maxit = 10000, eps_abs = 1e-4, eps_rel = 1e-4,
                     rho_ratio = 0.1, ...)
     {
         if(maxit <= 0)
