@@ -28,7 +28,7 @@ ADMM_LAD$methods(
         .self$maxit = 10000L
         .self$eps_abs = 1e-4
         .self$eps_rel = 1e-4
-        .self$rho_ratio = 1
+        .self$rho_ratio = 0.1
         .self$intercept = TRUE
     }
 )
@@ -89,10 +89,13 @@ ADMM_LAD_fit$methods(
     {
         yfit = as.numeric(.self$x %*% .self$beta[-1]) + .self$beta[1]
         dat = data.frame(yfit = yfit, y = .self$y)
-        ggplot(dat, aes(x = yfit, y = y)) +
+        g = ggplot(dat, aes(x = yfit, y = y)) +
             geom_point() +
+            geom_abline(intercept = 0, slope = 1, color = "red") +
             xlab("Fitted values") +
             ylab("Observed values")
+        print(g)
+        invisible(g)
     }
 )
 
@@ -100,7 +103,108 @@ ADMM_LAD_fit$methods(
 
 
 
-admm_lad = function(x, y, ...)
+#' Fitting A Least Absolute Deviation Model Using ADMM Algorithm
+#' 
+#' @description Least Absolute Deviation (LAD) is similar to an OLS regression
+#' model, but it minimizes the absolute deviation
+#' \eqn{\Vert y-X\beta \Vert_1}{||y - X\beta||_1} instead of the sum of squares
+#' \eqn{\Vert y-X\beta \Vert_2^2}{||y - X\beta||_2^2}. LAD is equivalent to the
+#' median regression, a special case of the quantile regression models. LAD is
+#' a robust regression technique in the sense that the estimated coefficients are
+#' insensitive to outliers.
+#' 
+#' This function will not directly conduct the computation,
+#' but rather returns an object of class "\code{ADMM_LAD}" that contains
+#' several memeber functions to actually constructs and fits the model.
+#' 
+#' Member functions that are callable from this object are listed below:
+#' 
+#' \tabular{ll}{
+#'   \code{$opts()}     \tab Setting additional options. See section
+#'                           \strong{Additional Options} for details.\cr
+#'   \code{$fit()}      \tab Fit the model and do the actual computation.
+#'                           See section \strong{Model Fitting} for details.
+#' }
+#' 
+#' @param x The data matrix.
+#' @param y The response vector.
+#' @param intercept Whether to include an intercept term. Default is \code{TRUE}.
+#' 
+#' @section Additional Options:
+#' Additional options related to ADMM algorithm can be set through the
+#' \code{$opts()} member function of an "\code{ADMM_LAD}" object. The usage of
+#' this method is
+#' 
+#' \preformatted{    model$opts(maxit = 10000, eps_abs = 1e-4, eps_rel = 1e-4,
+#'                rho_ratio = 0.1)
+#' }
+#' 
+#' Here \code{model} is the object returned by \code{admm_lad()}.
+#' Explanation of the arguments is given below:
+#' 
+#' \describe{
+#' \item{\code{maxit}}{Maximum number of iterations.}
+#' \item{\code{eps_abs}}{Absolute tolerance parameter.}
+#' \item{\code{eps_rel}}{Relative tolerance parameter.}
+#' \item{\code{rho_ratio}}{ADMM step size parameter.}
+#' }
+#' 
+#' This member function will implicitly return the "\code{ADMM_LAD}" object itself.
+#' 
+#' @section Model Fitting:
+#' Model will be fit after calling the \code{$fit()} member function. This is no
+#' argument that needs to be set. The function will return an object of class
+#' "\code{ADMM_LAD_fit}", which contains the following fields:
+#' 
+#' \describe{
+#' \item{\code{x}}{The data matrix.}
+#' \item{\code{y}}{The response vector.}
+#' \item{\code{beta}}{The estimated regression coefficients, including the intercept.}
+#' \item{\code{niter}}{Number of ADMM iterations.}
+#' }
+#' 
+#' Class "\code{ADMM_LAD_fit}" also contains a \code{$plot()} member function,
+#' which plots the fitted values with observed values. See the examples below.
+#' 
+#' @examples
+#' ## Robust regression with LAD ##
+#' 
+#' ## Generate data with an outlier
+#' set.seed(123)
+#' x = sort(rnorm(100))
+#' y = x + rnorm(100, sd = 0.3)
+#' y[1] = y[1] + 5
+#' 
+#' ## Build an LAD model (median regression)
+#' model = admm_lad(x, y)
+#' 
+#' ## Lower down the precision for faster computation
+#' model$opts(eps_rel = 1e-3)
+#' 
+#' ## Fit the model
+#' res = model$fit()
+#' 
+#' ## Plot for the fitted values and observed values
+#' res$plot()
+#' 
+#' ## The steps above can be accomplished using a chainable call
+#' admm_lad(x, y)$opts(eps_rel = 1e-3)$fit()$plot()
+#' 
+#' ## Compare LAD with OLS
+#' library(ggplot2)
+#' ols = lm(y ~ x)$coefficients
+#' d = data.frame(intercept = c(ols[1], res$beta[1]),
+#'                slope = c(ols[2], res$beta[2]),
+#'                method = c("OLS", "LAD"))
+#' ggplot(data.frame(x = x, y = y), aes(x = x, y = y)) +
+#'     geom_point() +
+#'     geom_abline(aes(intercept = intercept, slope = slope, color = method),
+#'                 data = d, show_guide = TRUE)
+#' 
+#' @author Yixuan Qiu <\url{http://statr.me}>
+#' @export
+admm_lad = function(x, y, intercept = TRUE, ...)
 {
-    ADMM_LAD(x, y, ...)
+    ADMM_LAD(x = as.matrix(x), y = as.numeric(y),
+        intercept = as.logical(intercept), ...)
 }
