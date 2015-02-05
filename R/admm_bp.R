@@ -8,9 +8,13 @@ ADMM_BP = setRefClass("ADMM_BP",
                                     rho_ratio = "numeric")
 )
 
+setClassUnion("CoefType", c("dgCMatrix", "numeric"))
+
 ## Class to store fitting results of Basis Pursuit model
 ADMM_BP_fit = setRefClass("ADMM_BP_fit",
-                          fields = list(beta = "dgCMatrix",
+                          fields = list(x = "matrix",
+                                        y = "numeric",
+                                        beta = "CoefType",
                                         niter = "integer")
 )
 
@@ -89,7 +93,7 @@ ADMM_BP$methods(
                          rho_ratio = .self$rho_ratio),
                     PACKAGE = "ADMM")
         
-        do.call(ADMM_BP_fit, res)
+        ADMM_BP_fit(x = .self$x, y = .self$y, beta = res$beta, niter = res$niter)
     }
 )
 
@@ -104,11 +108,17 @@ ADMM_BP_fit$methods(
     show_common = function()
     {
         cat("$beta\n")
-        cat(sprintf("<%d x %d> sparse matrix\n", nrow(.self$beta), ncol(.self$beta)))
+        if(class(.self$beta) == "dgCMatrix")
+        {
+            cat(sprintf("<%d x %d> sparse matrix\n",
+                        nrow(.self$beta), ncol(.self$beta)))
+        } else {
+            cat(sprintf("<%d x 1> vector\n", length(.self$beta)))
+        }
         cat("\n")
         cat("$niter\n")
         print(.self$niter)
-    }
+    },
     show = function()
     {
         cat("ADMM Basis Pursuit fitting result\n\n")
@@ -118,7 +128,7 @@ ADMM_BP_fit$methods(
 
 ## Plot ADMM_BP_fit object
 ADMM_BP_fit$methods(
-    plot = function()
+    plot = function(...)
     {
         coefs = as.numeric(.self$beta)
         dat = data.frame(Index = seq_along(coefs),
