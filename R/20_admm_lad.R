@@ -107,8 +107,8 @@ ADMM_LAD_fit$methods(
 #' 
 #' @description Least Absolute Deviation (LAD) is similar to an OLS regression
 #' model, but it minimizes the absolute deviation
-#' \eqn{\Vert y-X\beta \Vert_1}{||y - X\beta||_1} instead of the sum of squares
-#' \eqn{\Vert y-X\beta \Vert_2^2}{||y - X\beta||_2^2}. LAD is equivalent to the
+#' \eqn{\Vert y-X\beta \Vert_1}{||y - X * \beta||_1} instead of the sum of squares
+#' \eqn{\Vert y-X\beta \Vert_2^2}{||y - X * \beta||_2^2}. LAD is equivalent to the
 #' median regression, a special case of the quantile regression models. LAD is
 #' a robust regression technique in the sense that the estimated coefficients are
 #' insensitive to outliers.
