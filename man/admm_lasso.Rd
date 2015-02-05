@@ -47,7 +47,7 @@ Member functions that are callable from this object are listed below:
 \section{Setting Penalty Parameter}{
 
 The penalty parameter \eqn{\lambda} can be set through the member function
-\code{$penalty()}, with the usage and parameters below:
+\code{$penalty()}, with the usage and parameters given below:
 
 \preformatted{    model$penalty(lambda = NULL, nlambda = 100, lambda_min_ratio, ...)
 }
@@ -91,12 +91,10 @@ Here \code{model} is the object returned by \code{admm_lasso()}, and
 \code{nthread} is the number of threads to be used. \code{nthread} must be
 less than \code{ncol(x) / 5}.
 
-
 \strong{NOTE:} Even in serial version of \code{admm_lasso()}, most matrix
 operations are implicitly parallelized when proper compiler options are
 turned on. Hence the parallel version of \code{admm_lasso()} is not
 necessarily faster than the serial one.
-
 
 This member function will implicitly return the "\code{ADMM_Lasso}" object itself.
 }

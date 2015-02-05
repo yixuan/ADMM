@@ -264,7 +264,7 @@ ADMM_Lasso_fit$methods(
 #'                    are always returned on the original scale.
 #' @section Setting Penalty Parameter:
 #' The penalty parameter \eqn{\lambda} can be set through the member function
-#' \code{$penalty()}, with the usage and parameters below:
+#' \code{$penalty()}, with the usage and parameters given below:
 #' 
 #' \preformatted{    model$penalty(lambda = NULL, nlambda = 100, lambda_min_ratio, ...)
 #' }
