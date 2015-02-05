@@ -97,7 +97,7 @@ res
 ## Plot for the recovered vector
 res$plot()
 
-## The steps above can be accoumplished using a chainable call
+## The steps above can be accomplished using a chainable call
 admm_bp(x, y)$opts(eps_rel = 1e-5)$fit()$plot()
 
 ## Compare the true beta and the recovered one
