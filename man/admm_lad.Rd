@@ -101,9 +101,9 @@ admm_lad(x, y)$opts(eps_rel = 1e-3)$fit()$plot()
 ## Compare LAD with OLS
 library(ggplot2)
 ols = lm(y ~ x)$coefficients
-d = data.frame(intercept = c(ols[1], res$beta[1]),
-               slope = c(ols[2], res$beta[2]),
-               method = c("OLS", "LAD"))
+d = data.frame(intercept = c(ols[1], res$beta[1], 0),
+               slope = c(ols[2], res$beta[2], 1),
+               method = c("OLS", "LAD", "Truth"))
 ggplot(data.frame(x = x, y = y), aes(x = x, y = y)) +
     geom_point() +
     geom_abline(aes(intercept = intercept, slope = slope, color = method),
