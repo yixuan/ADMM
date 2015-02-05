@@ -12,9 +12,7 @@ setClassUnion("CoefType", c("dgCMatrix", "numeric"))
 
 ## Class to store fitting results of Basis Pursuit model
 ADMM_BP_fit = setRefClass("ADMM_BP_fit",
-                          fields = list(x = "matrix",
-                                        y = "numeric",
-                                        beta = "CoefType",
+                          fields = list(beta = "CoefType",
                                         niter = "integer")
 )
 
@@ -93,7 +91,7 @@ ADMM_BP$methods(
                          rho_ratio = .self$rho_ratio),
                     PACKAGE = "ADMM")
         
-        ADMM_BP_fit(x = .self$x, y = .self$y, beta = res$beta, niter = res$niter)
+        do.call(ADMM_BP_fit, res)
     }
 )
 

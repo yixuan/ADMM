@@ -4,7 +4,9 @@ ADMM_LAD = setRefClass("ADMM_LAD",
                        contains = "ADMM_BP")
 
 ## Class to store fitting results of LAD model
-ADMM_LAD_fit = setRefClass("ADMM_LAD_fit", contains = "ADMM_BP_fit")
+ADMM_LAD_fit = setRefClass("ADMM_LAD_fit",
+                           fields = list(x = "matrix", y = "numeric"),
+                           contains = "ADMM_BP_fit")
 
 
 
