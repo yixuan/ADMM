@@ -4,14 +4,16 @@ output:
     keep_md: yes
 ---
 
-### ADMM
+## Introduction
 
-`ADMM` is an R package to solve Lasso-like problems using the ADMM algorithm.
+`ADMM` is an R package that utilizes the Alternating Direction Method of Multipliers
+(ADMM) algorithm to solve a broad range of statistical optimization problems.
+Presently the models that `ADMM` has implemented include Lasso, Elastic Net,
+Dantzig Selector, Least Absolute Deviation and Basis Pursuit.
 
-### Comparison
+## Models
 
-Comparing `ADMM` with `glmnet`
-
+### Lasso
 ```{r}
 library(glmnet)
 library(ADMM)
@@ -23,60 +25,79 @@ b <- matrix(c(runif(m), rep(0, p - m)))
 x <- matrix(rnorm(n * p, mean = 1.2, sd = 2), n, p)
 y <- 5 + x %*% b + rnorm(n)
 
-## standardize = TRUE, intercept = TRUE
 fit <- glmnet(x, y)
 out_glmnet <- coef(fit, s = exp(-2), exact = TRUE)
-out_admm <- admm_lasso(x, y, exp(-2))
-out_paradmm <- admm_parlasso(x, y, exp(-2))
+out_admm <- admm_lasso(x, y)$penalty(exp(-2))$fit()
+out_paradmm <- admm_lasso(x, y)$penalty(exp(-2))$parallel()$fit()
+
 data.frame(glmnet = as.numeric(out_glmnet),
            admm = as.numeric(out_admm$beta),
            paradmm = as.numeric(out_paradmm$beta))
-
-## standardize = TRUE, intercept = FALSE
-fit2 <- glmnet(x, y, intercept = FALSE)
-out_glmnet2 <- coef(fit2, s = exp(-2), exact = TRUE)
-out_admm2 <- admm_lasso(x, y, exp(-2), intercept = FALSE)
-out_paradmm2 <- admm_parlasso(x, y, exp(-2), intercept = FALSE)
-data.frame(glmnet = as.numeric(out_glmnet2),
-           admm = as.numeric(out_admm2$beta),
-           paradmm = as.numeric(out_paradmm2$beta))
-
-## standardize = FALSE, intercept = TRUE
-fit3 <- glmnet(x, y, standardize = FALSE)
-out_glmnet3 <- coef(fit3, s = exp(-2), exact = TRUE)
-out_admm3 <- admm_lasso(x, y, exp(-2), standardize = FALSE)
-out_paradmm3 <- admm_parlasso(x, y, exp(-2), standardize = FALSE)
-data.frame(glmnet = as.numeric(out_glmnet3),
-           admm = as.numeric(out_admm3$beta),
-           paradmm = as.numeric(out_paradmm3$beta))
-
-## standardize = FALSE, intercept = FALSE
-fit4 <- glmnet(x, y, standardize = FALSE, intercept = FALSE)
-out_glmnet4 <- coef(fit4, s = exp(-2), exact = TRUE)
-out_admm4 <- admm_lasso(x, y, exp(-2), standardize = FALSE, intercept = FALSE)
-out_paradmm4 <- admm_parlasso(x, y, exp(-2), standardize = FALSE, intercept = FALSE)
-data.frame(glmnet = as.numeric(out_glmnet4),
-           admm = as.numeric(out_admm4$beta),
-           paradmm = as.numeric(out_paradmm4$beta))
 ```
 
-### rho setting
-
-```{r eval=FALSE}
-lambda <- exp(-2)
-rho_ratio <- exp(seq(log(0.1), log(10), length.out = 100))
-niter <- sapply(rho_ratio,
-    function(r) admm_lasso(x, y, lambda, opts = list(rho_ratio = r))$niter
-)
-plot(rho_ratio, niter)
+### Elastic Net
+```{r}
+fit <- glmnet(x, y, alpha = 0.5)
+out_glmnet <- coef(fit, s = exp(-2), exact = TRUE)
+out_admm <- admm_enet(x, y)$penalty(exp(-2), alpha = 0.5)$fit()
+data.frame(glmnet = as.numeric(out_glmnet),
+           admm = as.numeric(out_admm$beta))
 ```
 
-### Performance
+### Dantzig Selector
+```{r}
+library(flare)
+X <- scale(x)
+Y <- y - mean(y)
+
+out_flare <- slim(X, Y, nlambda = 20, lambda.min.ratio = 0.01, method = "dantzig")
+out_admm <- admm_dantzig(X, Y)$penalty(nlambda = 20, lambda_min_ratio = 0.01)$fit()
+
+range(out_flare$beta - out_admm$beta[-1, ])
+```
+
+### Least Absolute Deviation
+Least Absolute Deviation (LAD) minimizes `||y - Xb||_1` instead of
+`||y - Xb||_2^2` (OLS), and is equivalent to median regression.
 
 ```{r}
+library(quantreg)
+out_rq1 <- rq.fit(x, y)
+out_rq2 <- rq.fit(x, y, method = "fn")
+out_admm <- admm_lad(x, y, intercept = FALSE)$fit()
+
+data.frame(rq_br = out_rq1$coefficients,
+           rq_fn = out_rq2$coefficients,
+           admm = out_admm$beta[-1])
+```
+
+### Basis Pursuit
+```{r}
+set.seed(123)
+n <- 50
+p <- 100
+nsig <- 15
+beta_true <- c(runif(nsig), rep(0, p - nsig))
+beta_true <- sample(beta_true)
+
+x <- matrix(rnorm(n * p), n, p)
+y <- drop(x %*% beta_true)
+out_admm <- admm_bp(x, y)$fit()
+
+range(beta_true - out_admm$beta)
+```
+
+
+## Performance
+
+### Lasso and Elastic Net
+
+```{r}
+library(ADMM)
+library(glmnet)
 # compute the full solution path, n > p
 set.seed(123)
-n <- 50000
+n <- 20000
 p <- 1000
 m <- 100
 b <- matrix(c(runif(m), rep(0, p - m)))
@@ -84,16 +105,21 @@ x <- matrix(rnorm(n * p, sd = 2), n, p)
 y <- x %*% b + rnorm(n)
 
 system.time(res1 <- glmnet(x, y, nlambda = 20))
-system.time(res2 <- admm_lasso(x, y, nlambda = 20))
-system.time(res3 <- admm_parlasso(x, y, nlambda = 20))
+system.time(res2 <- admm_lasso(x, y)$penalty(res1$lambda)$fit())
+system.time(res3 <- admm_lasso(x, y)$penalty(res1$lambda)$parallel()$fit())
 
-nlam = length(res1$lambda)
+system.time(res4 <- glmnet(x, y, nlambda = 20, alpha = 0.6))
+system.time(res5 <- admm_enet(x, y)$penalty(res4$lambda, alpha = 0.6)$fit())
+
 res2$niter
-range(coef(res1) - res2$beta[, 1:nlam])
+range(coef(res1) - res2$beta)
 res3$niter
-range(coef(res1) - res3$beta[, 1:nlam])
+range(coef(res1) - res3$beta)
 
-# p > n, single lambda
+res5$niter
+range(coef(res4) - res5$beta)
+
+# p > n
 set.seed(123)
 n <- 2000
 p <- 10000
@@ -103,48 +129,52 @@ x <- matrix(rnorm(n * p, sd = 2), n, p)
 y <- x %*% b + rnorm(n)
 
 system.time(res1 <- glmnet(x, y, nlambda = 20))
-system.time(res2 <- admm_lasso(x, y, nlambda = 20))
-system.time(res3 <- admm_parlasso(x, y, nlambda = 20))
+system.time(res2 <- admm_lasso(x, y)$penalty(res1$lambda)$fit())
+system.time(res3 <- admm_lasso(x, y)$penalty(res1$lambda)$parallel()$fit())
 
-nlam = length(res1$lambda)
+system.time(res4 <- glmnet(x, y, nlambda = 20, alpha = 0.6))
+system.time(res5 <- admm_enet(x, y)$penalty(res4$lambda, alpha = 0.6)$fit())
+
 res2$niter
-range(coef(res1) - res2$beta[, 1:nlam])
+range(coef(res1) - res2$beta)
 res3$niter
-range(coef(res1) - res3$beta[, 1:nlam])
+range(coef(res1) - res3$beta)
+
+res5$niter
+range(coef(res4) - res5$beta)
 ```
 
-### rho setting
-
-```{r eval=FALSE}
-lambda <- exp(-2)
-rho_ratio <- exp(seq(log(0.1), log(10), length.out = 100))
-niter <- sapply(rho_ratio,
-    function(r) admm_lasso(x, y, lambda, opts = list(rho_ratio = r))$niter
-)
-plot(rho_ratio, niter)
-```
-
-### LAD
-
-**LAD** (Least Absolute Deviation) minimizes $\Vert y-X\beta\Vert_1$ instead of
-$\Vert y-X\beta\Vert_2^2$ (OLS), and is equivalent to median regression.
+### Dantzig Selector
 
 ```{r}
-library(quantreg)
+library(ADMM)
+library(flare)
+# compute the full solution path, n > p
 set.seed(123)
-n <- 100
-p <- 10
-b <- runif(p)
+n <- 1000
+p <- 200
+m <- 10
+b <- matrix(c(runif(m), rep(0, p - m)))
 x <- matrix(rnorm(n * p, sd = 2), n, p)
 y <- x %*% b + rnorm(n)
 
-out_rq1 <- rq.fit(x, y)
-out_rq2 <- rq.fit(x, y, method = "fn")
-out_admm <- admm_lad(x, y, intercept = FALSE)
+X <- scale(x)
+Y <- y - mean(y)
 
-data.frame(rq_br = out_rq1$coefficients,
-           rq_fn = out_rq2$coefficients,
-           admm = out_admm$beta[-1])
+system.time(res1 <- slim(X, Y, nlambda = 20, lambda.min.ratio = 0.01,
+                         method = "dantzig"))
+system.time(res2 <- admm_dantzig(X, Y)$penalty(nlambda = 20, lambda_min_ratio = 0.01)$
+                                      fit())
+
+range(res1$beta - res2$beta[-1, ])
+```
+
+
+### LAD
+
+```{r}
+library(ADMM)
+library(quantreg)
 
 set.seed(123)
 n <- 1000
@@ -155,7 +185,7 @@ y <- x %*% b + rnorm(n)
 
 system.time(res1 <- rq.fit(x, y))
 system.time(res2 <- rq.fit(x, y, method = "fn"))
-system.time(res3 <- admm_lad(x, y, intercept = FALSE, opts = list(eps_rel = 1e-4)))
+system.time(res3 <- admm_lad(x, y, intercept = FALSE)$fit())
 
 range(res1$coefficients - res2$coefficients)
 range(res1$coefficients - res3$beta[-1])
@@ -168,7 +198,7 @@ x <- matrix(rnorm(n * p, sd = 2), n, p)
 y <- x %*% b + rnorm(n)
 
 system.time(res1 <- rq.fit(x, y, method = "fn"))
-system.time(res2 <- admm_lad(x, y, intercept = FALSE, opts = list(eps_rel = 1e-4)))
+system.time(res2 <- admm_lad(x, y, intercept = FALSE)$fit())
 
 range(res1$coefficients - res2$beta[-1])
 
