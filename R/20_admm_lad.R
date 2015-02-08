@@ -29,7 +29,7 @@ ADMM_LAD$methods(
         .self$eps_abs = 1e-4
         .self$eps_rel = 1e-4
         .self$rho_ratio = 0.1
-        .self$intercept = TRUE
+        .self$intercept = as.logical(intercept)
     }
 )
 
