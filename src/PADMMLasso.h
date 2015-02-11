@@ -11,7 +11,7 @@ private:
     typedef Eigen::ArrayXd ArrayXd;
     typedef Eigen::SparseVector<double> SparseVector;
     typedef Eigen::Map<const MatrixXd> MapMat;
-    
+
     double lambda;  // L1 penalty parameter
     double lambda0; // with this lambda, all coefficients will be zero
     double sprad;   // spectral radius of A_i'A_i
@@ -67,7 +67,7 @@ private:
         } else {
             active_set_update(res);
         }
-        iter_counter++;        
+        iter_counter++;
     }
 
     // calculating the spectral radius of X'X
@@ -76,8 +76,8 @@ private:
     {
         Rcpp::NumericMatrix mat = Rcpp::wrap(X);
         Rcpp::Environment ADMM = Rcpp::Environment::namespace_env("ADMM");
-        Rcpp::Function spectral_radius = ADMM[".spectral_radius"];
-    
+        Rcpp::Function spectral_radius = ADMM[".spectral_radius_xx"];
+
         return Rcpp::as<double>(spectral_radius(mat));
     }
 
@@ -93,7 +93,7 @@ public:
     {
         sprad = spectral_radius(datX);
     }
-     
+
     virtual ~PADMMLasso_Worker() {}
 
     virtual double get_spectral_radius() { return sprad; }
@@ -155,7 +155,7 @@ private:
         res.noalias() = ((*datY) + rho * Ax_bar + dual_y) / (n_comp + rho);
     }
     virtual void rho_changed_action() {}
-    
+
 public:
     PADMMLasso_Master(const MatrixXd &datX_, const VectorXd &datY_,
                       int nthread_, bool use_BLAS_,
@@ -194,7 +194,7 @@ public:
 
         avg_sprad = avg_sprad_collector / n_comp;
     }
-        
+
     virtual ~PADMMLasso_Master()
     {
         for(int i = 0; i < n_comp; i++)
@@ -240,7 +240,7 @@ public:
     {
         SparseVector res(dim_main);
         res.reserve(dim_main / 2);
-        
+
         int offset = 0;
         for(int i = 0; i < n_comp; i++)
         {

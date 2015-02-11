@@ -28,6 +28,8 @@ protected:
 
     const MatrixXd *datX;         // pointer to data matrix
     const VectorXd *datY;         // pointer response vector
+    bool use_XX;                  // whether to cache X'X
+    MatrixXd XX;                  // X'X
     VectorXd XY;                  // X'y
     double XY_norm;               // L2 norm of X'y
 
@@ -41,8 +43,13 @@ protected:
 
     virtual void A_mult(VectorXd &res, SparseVector &x) // x -> Ax
     {
-        VectorXd tmp = (*datX) * x;
-        res.noalias() = (*datX).transpose() * tmp;
+        if(use_XX)
+        {
+            res.noalias() = XX * x;
+        } else {
+            VectorXd tmp = (*datX) * x;
+            res.noalias() = (*datX).transpose() * tmp;
+        }
     }
     virtual void At_mult(VectorXd &res, VectorXd &y) // y -> A'y
     {
@@ -118,8 +125,13 @@ protected:
     }
     virtual void next_z(VectorXd &res)
     {
-        VectorXd tmp = (*datX) * main_x;
-        cache_Ax.noalias() = (*datX).transpose() * tmp;
+        if(use_XX)
+        {
+            cache_Ax.noalias() = XX * main_x;
+        } else {
+            VectorXd tmp = (*datX) * main_x;
+            cache_Ax.noalias() = (*datX).transpose() * tmp;
+        }
 
         VectorXd z = cache_Ax + dual_y / rho - XY;
         for(int i = 0; i < res.size(); i++)
@@ -144,17 +156,26 @@ protected:
         return dual_y.norm() * eps_rel + sqrt(double(dim_dual)) * eps_abs;
     }
 
-    // calculating the spectral radius of X'XX'X
-    // in this case it is the largest eigenvalue of X'XX'X
-    static double spectral_radius(const MatrixXd &X)
+    // calculating the spectral radius of X'X
+    // in this case it is the largest eigenvalue of X'X
+    static double spectral_radius_xx(const MatrixXd &X)
     {
         Rcpp::NumericMatrix mat = Rcpp::wrap(X);
 
         Rcpp::Environment ADMM = Rcpp::Environment::namespace_env("ADMM");
-        Rcpp::Function spectral_radius = ADMM[".spectral_radius"];
-        double r = Rcpp::as<double>(spectral_radius(mat));
+        Rcpp::Function spectral_radius = ADMM[".spectral_radius_xx"];
+        return Rcpp::as<double>(spectral_radius(mat));
+    }
 
-        return r * r;
+    // calculating the spectral radius of X, if X is positive definite
+    // in this case it is the largest eigenvalue of X
+    static double spectral_radius_x(const MatrixXd &X)
+    {
+        Rcpp::NumericMatrix mat = Rcpp::wrap(X);
+
+        Rcpp::Environment ADMM = Rcpp::Environment::namespace_env("ADMM");
+        Rcpp::Function spectral_radius = ADMM[".spectral_radius_x"];
+        return Rcpp::as<double>(spectral_radius(mat));
     }
 
 public:
@@ -164,12 +185,21 @@ public:
         ADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
                  eps_abs_, eps_rel_),
         datX(&datX_), datY(&datY_),
+        use_XX(datX_.rows() > datX_.cols() && datX_.cols() <= 1000),
         XY(datX_.transpose() * datY_),
         XY_norm(XY.norm()),
         lambda0(XY.array().abs().maxCoeff()),
         cache_Ax(dim_dual)
     {
-        sprad = spectral_radius(datX_);
+        if(use_XX)
+        {
+            XX.noalias() = datX_.transpose() * datX_;
+            sprad = spectral_radius_x(XX);
+        } else {
+            sprad = spectral_radius_xx(datX_);
+        }
+
+        sprad *= sprad;
     }
 
     virtual double get_lambda_zero() { return lambda0; }

@@ -221,12 +221,20 @@ ADMM_Lasso_fit$methods(
 ## In this case it is the largest eigenvalue of x'x,
 ## and also the square of the largest singular value of x.
 ## This function will be called inside C++.
-.spectral_radius = function(x)
+.spectral_radius_xx = function(x)
 {
     svds(x, k = 1, nu = 0, nv = 0,
          opts = list(ncv = 5, tol = 1.0, maxitr = 100))$d^2
 }
 
+## Calculate the spectral radius of x, if x is positive definite.
+## In this case it is the largest eigenvalue of x.
+## This function will be called inside C++.
+.spectral_radius_x = function(x)
+{
+    eigs_sym(x, k = 1,
+             opts = list(ncv = 5, tol = 1.0, maxitr = 100, retvec = FALSE))$values[1]
+}
 
 #' Fitting A Lasso Model Using ADMM Algorithm
 #' 

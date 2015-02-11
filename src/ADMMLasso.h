@@ -33,7 +33,7 @@ protected:
     int iter_counter;             // which iteration are we in?
 
     VectorXd cache_Ax;            // cache Ax
-    
+
     virtual void A_mult(VectorXd &res, SparseVector &x) // x -> Ax
     {
         res.noalias() = (*datX) * x;
@@ -55,7 +55,7 @@ protected:
     virtual void B_mult (VectorXd &res, VectorXd &z) // z -> Bz
     {
         res.swap(z);
-    }  
+    }
     virtual double c_norm() { return 0.0; } // ||c||_2
     virtual void next_residual(VectorXd &res)
     {
@@ -98,7 +98,7 @@ protected:
 
         res.prune(0.0);
     }
-    
+
     virtual void next_x(SparseVector &res)
     {
         if(iter_counter % 10 == 0 && lambda < lambda0)
@@ -111,7 +111,7 @@ protected:
         } else {
             active_set_update(res);
         }
-        iter_counter++;        
+        iter_counter++;
     }
     virtual void next_z(VectorXd &res)
     {
@@ -136,13 +136,13 @@ protected:
     static double spectral_radius(const MatrixXd &X)
     {
         Rcpp::NumericMatrix mat = Rcpp::wrap(X);
-    
+
         Rcpp::Environment ADMM = Rcpp::Environment::namespace_env("ADMM");
-        Rcpp::Function spectral_radius = ADMM[".spectral_radius"];
-    
+        Rcpp::Function spectral_radius = ADMM[".spectral_radius_xx"];
+
         return Rcpp::as<double>(spectral_radius(mat));
     }
-    
+
 public:
     ADMMLasso(const MatrixXd &datX_, const VectorXd &datY_,
               double eps_abs_ = 1e-6,
