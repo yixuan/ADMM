@@ -54,7 +54,7 @@ private:
 
         for(SparseVector::InnerIterator iter(res); iter; ++iter)
         {
-            double val = iter.value() - vec.dot((*datX).col(iter.index()));
+            double val = iter.value() - vec.dot(datX.col(iter.index()));
 
             if(val > thresh)
                 iter.valueRef() = (val - thresh) / denom;
@@ -73,7 +73,7 @@ private:
         {
             double gamma = 2 * rho + sprad;
             VectorXd vec = cache_Ax + aux_z + dual_y / rho;
-            vec = -(*datX).transpose() * vec / gamma;
+            vec = -datX.transpose() * vec / gamma;
             vec += main_x;
             enet(res, vec, lambda / (rho * gamma));
         } else {

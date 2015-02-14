@@ -22,10 +22,12 @@ protected:
     typedef Eigen::MatrixXd MatrixXd;
     typedef Eigen::VectorXd VectorXd;
     typedef Eigen::ArrayXd ArrayXd;
+    typedef Eigen::Map<const MatrixXd> MapMat;
+    typedef Eigen::Map<const VectorXd> MapVec;
     typedef Eigen::SparseVector<double> SparseVector;
 
-    const MatrixXd *datX;         // pointer to data matrix
-    const VectorXd *datY;         // pointer response vector
+    const MapMat datX;            // pointer to data matrix
+    const MapVec datY;            // pointer response vector
     double sprad;                 // spectral radius of X'X
     double lambda;                // L1 penalty
     double lambda0;               // minimum lambda to make coefficients all zero
@@ -36,7 +38,7 @@ protected:
 
     virtual void A_mult(VectorXd &res, SparseVector &x) // x -> Ax
     {
-        res.noalias() = (*datX) * x;
+        res.noalias() = datX * x;
     }
     virtual void At_mult(VectorXd &res, VectorXd &y) // y -> A'y
     {
@@ -86,7 +88,7 @@ protected:
 
         for(SparseVector::InnerIterator iter(res); iter; ++iter)
         {
-            double val = iter.value() - vec.dot((*datX).col(iter.index()));
+            double val = iter.value() - vec.dot(datX.col(iter.index()));
 
             if(val > penalty)
                 iter.valueRef() = val - penalty;
@@ -105,7 +107,7 @@ protected:
         {
             double gamma = 2 * rho + sprad;
             VectorXd vec = cache_Ax + aux_z + dual_y / rho;
-            vec = -(*datX).transpose() * vec / gamma;
+            vec = -datX.transpose() * vec / gamma;
             vec += main_x;
             soft_threshold(res, vec, lambda / (rho * gamma));
         } else {
@@ -115,8 +117,8 @@ protected:
     }
     virtual void next_z(VectorXd &res)
     {
-        cache_Ax = (*datX) * main_x;
-        res.noalias() = ((*datY) + dual_y + rho * cache_Ax) / (-1 - rho);
+        cache_Ax = datX * main_x;
+        res.noalias() = (datY + dual_y + rho * cache_Ax) / (-1 - rho);
     }
     virtual void rho_changed_action() {}
     // a faster version compared to the base implementation
@@ -149,11 +151,26 @@ public:
               double eps_rel_ = 1e-6) :
         ADMMBase(datX_.cols(), datX_.rows(), datX_.rows(),
                  eps_abs_, eps_rel_),
-        datX(&datX_), datY(&datY_),
+        datX(datX_.data(), datX_.rows(), datX_.cols()),
+        datY(datY_.data(), datY_.size()),
         cache_Ax(dim_dual)
     {
-        lambda0 = ((*datX).transpose() * (*datY)).array().abs().maxCoeff();
+        lambda0 = (datX.transpose() * datY).array().abs().maxCoeff();
         sprad = spectral_radius(datX_);
+    }
+
+    ADMMLasso(const double *datX_, const double *datY_,
+              int n_, int p_,
+              double eps_abs_ = 1e-6,
+              double eps_rel_ = 1e-6) :
+        ADMMBase(p_, n_, n_, eps_abs_, eps_rel_),
+        datX(datX_, n_, p_),
+        datY(datY_, n_),
+        cache_Ax(dim_dual)
+    {
+        lambda0 = (datX.transpose() * datY).array().abs().maxCoeff();
+        MatrixXd X = datX;
+        sprad = spectral_radius(X);
     }
 
     virtual double get_lambda_zero() { return lambda0; }
