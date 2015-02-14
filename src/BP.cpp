@@ -50,6 +50,7 @@ BEGIN_RCPP
     int niter = solver.solve(maxit);
     SpMat beta(datX.cols(), 1);
     beta.col(0) = solver.get_z();
+    beta.makeCompressed();
 
 #if ADMM_PROFILE > 0
     t2 = clock();
