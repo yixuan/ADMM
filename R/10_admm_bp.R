@@ -2,6 +2,7 @@
 ADMM_BP = setRefClass("ADMM_BP",
                       fields = list(x = "matrix",
                                     y = "numeric",
+                                    nthread = "integer",
                                     maxit = "integer",
                                     eps_abs = "numeric",
                                     eps_rel = "numeric",
@@ -33,6 +34,7 @@ ADMM_BP$methods(
         
         .self$x = as.matrix(x)
         .self$y = as.numeric(y)
+        .self$nthread = 1L
         .self$maxit = 10000L
         .self$eps_abs = 1e-4
         .self$eps_rel = 1e-4
@@ -56,6 +58,20 @@ ADMM_BP$methods(
     {
         cat("ADMM Basis Pursuit model\n\n")
         show_common()
+    }
+)
+
+## Specify parallel computing
+ADMM_BP$methods(
+    parallel = function(nthread = 2, ...)
+    {
+        nthread_val = as.integer(nthread)
+        if(nthread_val < 1)
+            nthread_val = 1L
+        
+        .self$nthread = nthread_val
+        
+        invisible(.self)
     }
 )
 
@@ -84,12 +100,20 @@ ADMM_BP$methods(
 ADMM_BP$methods(
     fit = function(...)
     {
-        res = .Call("admm_bp", .self$x, .self$y,
-                    list(maxit = .self$maxit,
-                         eps_abs = .self$eps_abs,
-                         eps_rel = .self$eps_rel,
-                         rho_ratio = .self$rho_ratio),
-                    PACKAGE = "ADMM")
+        res = if(.self$nthread <= 1)
+            .Call("admm_bp", .self$x, .self$y,
+                  list(maxit = .self$maxit,
+                       eps_abs = .self$eps_abs,
+                       eps_rel = .self$eps_rel,
+                       rho_ratio = .self$rho_ratio),
+                  PACKAGE = "ADMM")
+        else
+            .Call("admm_parbp", .self$x, .self$y, .self$nthread,
+                  list(maxit = .self$maxit,
+                       eps_abs = .self$eps_abs,
+                       eps_rel = .self$eps_rel,
+                       rho_ratio = .self$rho_ratio),
+                  PACKAGE = "ADMM")
         
         do.call(ADMM_BP_fit, res)
     }
