@@ -101,15 +101,21 @@ protected:
         res.prune(0.0);
     }
 
-    virtual void next_x(SparseVector &res)
+    virtual void regular_update(SparseVector &res)
+    {
+        double gamma = 2 * rho + sprad;
+        VectorXd tmp = cache_Ax + aux_z + dual_y / rho;
+        VectorXd vec = datX.transpose() * tmp;
+        vec /= -gamma;
+        vec += main_x;
+        soft_threshold(res, vec, lambda / (rho * gamma));
+    }
+
+    void next_x(SparseVector &res)
     {
         if(iter_counter % 10 == 0 && lambda < lambda0)
         {
-            double gamma = 2 * rho + sprad;
-            VectorXd vec = cache_Ax + aux_z + dual_y / rho;
-            vec = -datX.transpose() * vec / gamma;
-            vec += main_x;
-            soft_threshold(res, vec, lambda / (rho * gamma));
+            regular_update(res);
         } else {
             active_set_update(res);
         }
