@@ -111,7 +111,7 @@ BEGIN_RCPP
             solver.init_warm(ilambda);
 
         niter[i] = solver.solve(maxit);
-        SpVec res = solver.get_x();
+        SpVec res = solver.get_z();
         double beta0 = 0.0;
         datstd.recover(beta0, res);
         write_beta_matrix(beta, i, beta0, res);
