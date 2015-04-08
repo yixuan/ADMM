@@ -2,6 +2,8 @@
 #define ADMMLASSO_H
 
 #include "ADMMBase.h"
+#include "Eigs/SymEigsSolver.h"
+#include "Eigs/MatOpDense.h"
 
 // minimize  1/2 * ||y - X * beta||^2 + lambda * ||beta||_1
 //
@@ -143,12 +145,14 @@ protected:
     // in this case it is the largest eigenvalue of X'X
     static double spectral_radius(const MatrixXd &X)
     {
-        Rcpp::NumericMatrix mat = Rcpp::wrap(X);
+        MatOpXX<double> op(X);
+        SymEigsSolver<double, LARGEST_ALGE> eigs(&op, 1, 5);
+        srand(0);
+        eigs.init();
+        eigs.compute(100, 0.1);
+        VectorXd eval = eigs.eigenvalues();
 
-        Rcpp::Environment ADMM = Rcpp::Environment::namespace_env("ADMM");
-        Rcpp::Function spectral_radius = ADMM[".spectral_radius_xx"];
-
-        return Rcpp::as<double>(spectral_radius(mat));
+        return eval[0];
     }
 
 public:
