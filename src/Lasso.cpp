@@ -1,3 +1,5 @@
+#define EIGEN_DONT_PARALLELIZE
+
 #include "ADMMLasso.h"
 #include "DataStd.h"
 
@@ -46,7 +48,7 @@ BEGIN_RCPP
 
     MatrixXd datX(as<MatrixXd>(x_));
     VectorXd datY(as<VectorXd>(y_));
-    
+
     // In glmnet, we minimize
     //   1/(2n) * ||y - X * beta||^2 + lambda * ||beta||_1
     // which is equivalent to minimizing
@@ -55,7 +57,7 @@ BEGIN_RCPP
     int p = datX.cols();
     ArrayXd lambda(as<ArrayXd>(lambda_));
     int nlambda = lambda.size();
-    
+
     List opts(opts_);
     int maxit = as<int>(opts["maxit"]);
     double eps_abs = as<double>(opts["eps_abs"]);
@@ -77,14 +79,14 @@ BEGIN_RCPP
     t1 = clock();
     Rcpp::Rcout << "part2: " << double(t1 - t2) / CLOCKS_PER_SEC << " secs.\n";
 #endif
-    
+
     ADMMLasso solver(datX, datY, eps_abs, eps_rel);
 
 #if ADMM_PROFILE > 0
     t2 = clock();
     Rcpp::Rcout << "part3: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs.\n";
 #endif
-    
+
     if(nlambda < 1)
     {
         double lmax = solver.get_lambda_zero() / n * datstd.get_scaleY();
