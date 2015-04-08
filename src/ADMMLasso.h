@@ -36,11 +36,11 @@ protected:
 
     VectorXd cache_Ax;            // cache Ax
 
-    virtual void A_mult(VectorXd &res, SparseVector &x) // x -> Ax
+    void A_mult(VectorXd &res, SparseVector &x) // x -> Ax
     {
         res.noalias() = datX * x;
     }
-    virtual void At_mult(VectorXd &res, VectorXd &y) // y -> A'y
+    void At_mult(VectorXd &res, VectorXd &y) // y -> A'y
     {
         // The correct operation should be the line below
         //     res.noalias() = (*datX).transpose() * y;
@@ -54,12 +54,12 @@ protected:
         // In this case, At_mult will be an identity transformation.
         res.swap(y);
     }
-    virtual void B_mult (VectorXd &res, VectorXd &z) // z -> Bz
+    void B_mult (VectorXd &res, VectorXd &z) // z -> Bz
     {
         res.swap(z);
     }
-    virtual double c_norm() { return 0.0; } // ||c||_2
-    virtual void next_residual(VectorXd &res)
+    double c_norm() { return 0.0; } // ||c||_2
+    void next_residual(VectorXd &res)
     {
         res.noalias() = cache_Ax + aux_z;
     }
@@ -115,20 +115,20 @@ protected:
         }
         iter_counter++;
     }
-    virtual void next_z(VectorXd &res)
+    void next_z(VectorXd &res)
     {
         cache_Ax = datX * main_x;
         res.noalias() = (datY + dual_y + rho * cache_Ax) / (-1 - rho);
     }
-    virtual void rho_changed_action() {}
+    void rho_changed_action() {}
     // a faster version compared to the base implementation
-    virtual double compute_eps_primal()
+    double compute_eps_primal()
     {
         double r = std::max(cache_Ax.norm(), aux_z.norm());
         return r * eps_rel + sqrt(double(dim_dual)) * eps_abs;
     }
     // a faster version compared to the base implementation
-    virtual double compute_eps_dual()
+    double compute_eps_dual()
     {
         return dual_y.norm() * eps_rel + sqrt(double(dim_dual)) * eps_abs;
     }
@@ -173,10 +173,10 @@ public:
         sprad = spectral_radius(X);
     }
 
-    virtual double get_lambda_zero() { return lambda0; }
+    double get_lambda_zero() { return lambda0; }
 
     // init() is a cold start for the first lambda
-    virtual void init(double lambda_, double rho_ratio_)
+    void init(double lambda_, double rho_ratio_)
     {
         main_x.setZero();
         cache_Ax.setZero();
@@ -194,7 +194,7 @@ public:
     }
     // when computing for the next lambda, we can use the
     // current main_x, aux_z, dual_y and rho as initial values
-    virtual void init_warm(double lambda_)
+    void init_warm(double lambda_)
     {
         lambda = lambda_;
         eps_primal = 0.0;

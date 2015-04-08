@@ -103,7 +103,7 @@ public:
         eps_abs(eps_abs_), eps_rel(eps_rel_)
     {}
 
-    virtual void update_x()
+    void update_x()
     {
         eps_primal = compute_eps_primal();
         eps_dual = compute_eps_dual();
@@ -125,7 +125,7 @@ public:
 
         main_x.swap(newx);
     }
-    virtual void update_z()
+    void update_z()
     {
         VecTypeZ newz(dim_aux);
         next_z(newz);
@@ -152,7 +152,7 @@ public:
 
         aux_z.swap(newz);
     }
-    virtual void update_y()
+    void update_y()
     {
         VectorXd newr(dim_dual);
         next_residual(newr);
@@ -162,7 +162,7 @@ public:
         dual_y.noalias() += rho * newr;
     }
 
-    virtual void debuginfo()
+    void debuginfo()
     {
         Rcpp::Rcout << "eps_primal = " << eps_primal << std::endl;
         Rcpp::Rcout << "resid_primal = " << resid_primal << std::endl;
@@ -171,13 +171,13 @@ public:
         Rcpp::Rcout << "rho = " << rho << std::endl;
     }
 
-    virtual bool converged()
+    bool converged()
     {
         return (resid_primal < eps_primal) &&
                (resid_dual < eps_dual);
     }
 
-    virtual int solve(int maxit)
+    int solve(int maxit)
     {
         int i;
 
@@ -228,9 +228,9 @@ public:
         return i + 1;
     }
 
-    virtual VecTypeX get_x() { return main_x; }
-    virtual VecTypeZ get_z() { return aux_z; }
-    virtual VectorXd get_y() { return dual_y; }
+    VecTypeX get_x() { return main_x; }
+    VecTypeZ get_z() { return aux_z; }
+    VectorXd get_y() { return dual_y; }
 };
 
 
