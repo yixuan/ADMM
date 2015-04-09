@@ -11,7 +11,7 @@ ADMM_Lasso = setRefClass("ADMM_Lasso",
                   maxit = "integer",
                   eps_abs = "numeric",
                   eps_rel = "numeric",
-                  rho_ratio = "numeric")
+                  rho_rel = "numeric")
 )
 
 ## Class to store fitting results of Lasso model
@@ -45,7 +45,7 @@ ADMM_Lasso$methods(
         .self$maxit = 10000L
         .self$eps_abs = 1e-5
         .self$eps_rel = 1e-5
-        .self$rho_ratio = 0.1
+        .self$rho_rel = 10
     }
 )
 
@@ -114,19 +114,19 @@ ADMM_Lasso$methods(
 ## Specify additional parameters
 ADMM_Lasso$methods(
     opts = function(maxit = 10000, eps_abs = 1e-5, eps_rel = 1e-5,
-                    rho_ratio = 0.1, ...)
+                    rho_rel = 10, ...)
     {
         if(maxit <= 0)
             stop("maxit should be positive")
         if(eps_abs < 0 | eps_rel < 0)
             stop("eps_abs and eps_rel should be nonnegative")
-        if(rho_ratio <= 0)
-            stop("rho_ratio should be positive")
+        if(rho_rel <= 0)
+            stop("rho_rel should be positive")
         
         .self$maxit = as.integer(maxit)
         .self$eps_abs = as.numeric(eps_abs)
         .self$eps_rel = as.numeric(eps_rel)
-        .self$rho_ratio = as.numeric(rho_ratio)
+        .self$rho_rel = as.numeric(rho_rel)
         
         invisible(.self)
     }
@@ -143,7 +143,7 @@ ADMM_Lasso$methods(
                   list(maxit = .self$maxit,
                        eps_abs = .self$eps_abs,
                        eps_rel = .self$eps_rel,
-                       rho_ratio = .self$rho_ratio),
+                       rho_rel = .self$rho_rel),
                   PACKAGE = "ADMM")
         else
             .Call("admm_parlasso", .self$x, .self$y, .self$lambda,
@@ -153,7 +153,7 @@ ADMM_Lasso$methods(
                   list(maxit = .self$maxit,
                        eps_abs = .self$eps_abs,
                        eps_rel = .self$eps_rel,
-                       rho_ratio = .self$rho_ratio),
+                       rho_rel = .self$rho_rel),
                   PACKAGE = "ADMM")
         do.call(ADMM_Lasso_fit, res)
     }

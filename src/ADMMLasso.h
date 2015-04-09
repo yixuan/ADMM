@@ -30,6 +30,7 @@ protected:
 
     const MapMat datX;            // pointer to data matrix
     const MapVec datY;            // pointer response vector
+    const MatrixXd XX;            // X'X
     const VectorXd XY;            // X'Y
     LLT solver;                   // matrix factorization
 
@@ -81,7 +82,7 @@ protected:
     }
     void rho_changed_action()
     {
-        solver.compute(datX.transpose() * datX + rho * MatrixXd::Identity(dim_main, dim_main));
+        solver.compute(XX + rho * MatrixXd::Identity(dim_main, dim_main));
     }
 
 
@@ -114,6 +115,7 @@ public:
                  eps_abs_, eps_rel_),
         datX(datX_.data(), datX_.rows(), datX_.cols()),
         datY(datY_.data(), datY_.size()),
+        XX(datX.transpose() * datX),
         XY(datX.transpose() * datY)
     {
         lambda0 = XY.array().abs().maxCoeff();
@@ -126,6 +128,7 @@ public:
         ADMMBase(p_, p_, p_, eps_abs_, eps_rel_),
         datX(datX_, n_, p_),
         datY(datY_, n_),
+        XX(datX.transpose() * datX),
         XY(datX.transpose() * datY)
     {
         lambda0 = XY.array().abs().maxCoeff();
@@ -134,20 +137,25 @@ public:
     double get_lambda_zero() { return lambda0; }
 
     // init() is a cold start for the first lambda
-    void init(double lambda_, double rho_ratio_)
+    void init(double lambda_, double rho_rel_)
     {
         main_x.setZero();
         aux_z.setZero();
         dual_y.setZero();
+
         adj_z.setZero();
         adj_y.setZero();
+
         lambda = lambda_;
-        rho = lambda_ / rho_ratio_;
+        rho = lambda_ * rho_rel_;
+
         eps_primal = 0.0;
         eps_dual = 0.0;
         resid_primal = 9999;
         resid_dual = 9999;
+
         adj_a = 1.0;
+        adj_c = 9999;
 
         rho_changed_action();
     }
@@ -156,10 +164,14 @@ public:
     void init_warm(double lambda_)
     {
         lambda = lambda_;
+
         eps_primal = 0.0;
         eps_dual = 0.0;
         resid_primal = 9999;
         resid_dual = 9999;
+
+        // adj_a = 1.0;
+        // adj_c = 9999;
     }
 };
 
