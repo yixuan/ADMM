@@ -1,6 +1,8 @@
 #ifndef DATASTD_H
 #define DATASTD_H
 
+#include <Eigen/Dense>
+
 class DataStd
 {
 private:
@@ -35,7 +37,7 @@ public:
         this->flag = int(standardize) + 2 * int(intercept);
         this->meanY = 0.0;
         this->scaleY = 1.0;
-        
+
         switch(flag)
         {
             case 1:
@@ -56,19 +58,15 @@ public:
     static double sd_n(const Eigen::Ref<Eigen::VectorXd> &v)
     {
         double mean = v.mean();
-        double s = 0.0, tmp = 0.0;
-        int n = v.size();
-        for(int i = 0; i < n; i++)
-        {
-            tmp = v[i] - mean;
-            s += tmp * tmp;
-        }
-        s /= n;
-        return sqrt(s);
+        VectorXd v_centered = v.array() - mean;
+
+        return v_centered.norm() / std::sqrt(double(v.size()));
     }
 
     void standardize(MatrixXd &X, VectorXd &Y)
     {
+        double n_invsqrt = 1.0 / std::sqrt(double(n));
+
         // standardize Y
         switch(flag)
         {
@@ -80,7 +78,7 @@ public:
             case 3:
                 meanY = Y.mean();
                 Y.array() -= meanY;
-                scaleY = Y.norm() / sqrt(double(n));
+                scaleY = Y.norm() * n_invsqrt;
                 Y.array() /= scaleY;
                 break;
             default:
@@ -88,6 +86,7 @@ public:
         }
 
         // standardize X
+
         switch(flag)
         {
             case 1:
@@ -98,21 +97,18 @@ public:
                 }
                 break;
             case 2:
-                meanX = X.colwise().mean();
                 for(int i = 0; i < p; i++)
                 {
+                    meanX[i] = X.col(i).mean();
                     X.col(i).array() -= meanX[i];
                 }
                 break;
             case 3:
-                meanX = X.colwise().mean();
                 for(int i = 0; i < p; i++)
                 {
+                    meanX[i] = X.col(i).mean();
                     X.col(i).array() -= meanX[i];
-                }
-                scaleX = X.colwise().norm() / sqrt(double(n));
-                for(int i = 0; i < p; i++)
-                {
+                    scaleX[i] = X.col(i).norm() * n_invsqrt;
                     X.col(i).array() /= scaleX[i];
                 }
                 break;
