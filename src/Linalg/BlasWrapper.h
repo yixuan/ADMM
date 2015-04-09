@@ -56,6 +56,25 @@ inline void cross_prod_lower(Eigen::MatrixXd &res, const Eigen::Map<const Eigen:
            &zero, res_ptr, &p);
 }
 
+inline void tcross_prod_lower(Eigen::MatrixXd &res, const Eigen::Map<const Eigen::MatrixXd> &X)
+{
+    const double one = 1.0;
+    const double zero = 0.0;
+    const char no_trans = 'N';
+    const char uplo = 'L';
+
+    const int n = X.rows();
+    const int p = X.cols();
+    const double *x_ptr = X.data();
+
+    res.resize(n, n);
+    double *res_ptr = res.data();
+
+    dsyrk_(&uplo, &no_trans, &n, &p,
+           &one, x_ptr, &n,
+           &zero, res_ptr, &n);
+}
+
 
 
 } // namespace Linalg
