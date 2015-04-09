@@ -45,7 +45,7 @@ ADMM_Lasso$methods(
         .self$maxit = 10000L
         .self$eps_abs = 1e-5
         .self$eps_rel = 1e-5
-        .self$rho_rel = 10
+        .self$rho_rel = 1.0
     }
 )
 
@@ -114,7 +114,7 @@ ADMM_Lasso$methods(
 ## Specify additional parameters
 ADMM_Lasso$methods(
     opts = function(maxit = 10000, eps_abs = 1e-5, eps_rel = 1e-5,
-                    rho_rel = 10, ...)
+                    rho_rel = 1.0, ...)
     {
         if(maxit <= 0)
             stop("maxit should be positive")
