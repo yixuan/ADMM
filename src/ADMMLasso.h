@@ -32,6 +32,7 @@ protected:
     const MapMat datX;            // pointer to data matrix
     const MapVec datY;            // pointer response vector
     const VectorXd XY;            // X'Y
+    const bool X_is_thin;         // whether nrow(X) > ncol(X)
     LLT solver;                   // matrix factorization
 
     double lambda;                // L1 penalty
@@ -68,7 +69,13 @@ protected:
     {
         VectorXd rhs = XY - adj_y;
         rhs += rho * adj_z;
-        res = solver.solve(rhs);
+        if(X_is_thin)
+        {
+            res = solver.solve(rhs);
+        } else {
+            res = rhs -  datX.transpose() * solver.solve(datX * rhs);
+            res /= rho;
+        }
     }
     void next_z(SparseVector &res)
     {
@@ -83,7 +90,10 @@ protected:
     void rho_changed_action()
     {
         MatrixXd XX;
-        Linalg::cross_prod_lower(XX, datX);
+        if(X_is_thin)
+            Linalg::cross_prod_lower(XX, datX);
+        else
+            Linalg::tcross_prod_lower(XX, datX);
         XX.diagonal().array() += rho;
         solver.compute(XX.triangularView<Eigen::Lower>());
     }
@@ -119,6 +129,7 @@ public:
         datX(datX_.data(), datX_.rows(), datX_.cols()),
         datY(datY_.data(), datY_.size()),
         XY(datX.transpose() * datY),
+        X_is_thin(datX.rows() > datX.cols()),
         lambda0(XY.array().abs().maxCoeff())
     {}
 
@@ -130,6 +141,7 @@ public:
         datX(datX_, n_, p_),
         datY(datY_, n_),
         XY(datX.transpose() * datY),
+        X_is_thin(datX.rows() > datX.cols()),
         lambda0(XY.array().abs().maxCoeff())
     {}
 
