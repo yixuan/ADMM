@@ -1,3 +1,5 @@
+#define EIGEN_DONT_PARALLELIZE
+
 #include "ADMMEnet.h"
 #include "DataStd.h"
 
@@ -9,12 +11,8 @@ using Eigen::ArrayXXd;
 using Rcpp::wrap;
 using Rcpp::as;
 using Rcpp::List;
-using Rcpp::IntegerVector;
-using Rcpp::NumericVector;
-using Rcpp::NumericMatrix;
-using Rcpp::Environment;
-using Rcpp::Function;
 using Rcpp::Named;
+using Rcpp::IntegerVector;
 
 typedef Eigen::Map<MatrixXd> MapMat;
 typedef Eigen::Map<VectorXd> MapVec;
@@ -60,7 +58,7 @@ BEGIN_RCPP
     int maxit = as<int>(opts["maxit"]);
     double eps_abs = as<double>(opts["eps_abs"]);
     double eps_rel = as<double>(opts["eps_rel"]);
-    double rho_ratio = as<double>(opts["rho_ratio"]);
+    double rho_rel = as<double>(opts["rho_rel"]);
 
     double alpha = as<double>(alpha_);
 
@@ -106,12 +104,12 @@ BEGIN_RCPP
     {
         ilambda = lambda[i] * n / datstd.get_scaleY();
         if(i == 0)
-            solver.init(ilambda, rho_ratio);
+            solver.init(ilambda, rho_rel);
         else
             solver.init_warm(ilambda);
 
         niter[i] = solver.solve(maxit);
-        SpVec res = solver.get_x();
+        SpVec res = solver.get_z();
         double beta0 = 0.0;
         datstd.recover(beta0, res);
         write_beta_matrix(beta, i, beta0, res);
