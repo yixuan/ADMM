@@ -11,12 +11,8 @@ using Eigen::ArrayXXd;
 using Rcpp::wrap;
 using Rcpp::as;
 using Rcpp::List;
-using Rcpp::IntegerVector;
-using Rcpp::NumericVector;
-using Rcpp::NumericMatrix;
-using Rcpp::Environment;
-using Rcpp::Function;
 using Rcpp::Named;
+using Rcpp::IntegerVector;
 
 typedef Eigen::Map<MatrixXd> MapMat;
 typedef Eigen::Map<VectorXd> MapVec;
