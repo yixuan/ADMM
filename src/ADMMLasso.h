@@ -2,6 +2,7 @@
 #define ADMMLASSO_H
 
 #include "ADMMBase.h"
+#include "Linalg/BlasWrapper.h"
 #include "Eigs/SymEigsSolver.h"
 #include "Eigs/MatOpDense.h"
 
@@ -30,7 +31,6 @@ protected:
 
     const MapMat datX;            // pointer to data matrix
     const MapVec datY;            // pointer response vector
-    const MatrixXd XX;            // X'X
     const VectorXd XY;            // X'Y
     LLT solver;                   // matrix factorization
 
@@ -82,7 +82,10 @@ protected:
     }
     void rho_changed_action()
     {
-        solver.compute(XX + rho * MatrixXd::Identity(dim_main, dim_main));
+        MatrixXd XX;
+        Linalg::cross_prod_lower(XX, datX);
+        XX.diagonal().array() += rho;
+        solver.compute(XX.triangularView<Eigen::Lower>());
     }
 
 
@@ -115,11 +118,9 @@ public:
                  eps_abs_, eps_rel_),
         datX(datX_.data(), datX_.rows(), datX_.cols()),
         datY(datY_.data(), datY_.size()),
-        XX(datX.transpose() * datX),
-        XY(datX.transpose() * datY)
-    {
-        lambda0 = XY.array().abs().maxCoeff();
-    }
+        XY(datX.transpose() * datY),
+        lambda0(XY.array().abs().maxCoeff())
+    {}
 
     ADMMLasso(const double *datX_, const double *datY_,
               int n_, int p_,
@@ -128,11 +129,9 @@ public:
         ADMMBase(p_, p_, p_, eps_abs_, eps_rel_),
         datX(datX_, n_, p_),
         datY(datY_, n_),
-        XX(datX.transpose() * datX),
-        XY(datX.transpose() * datY)
-    {
-        lambda0 = XY.array().abs().maxCoeff();
-    }
+        XY(datX.transpose() * datY),
+        lambda0(XY.array().abs().maxCoeff())
+    {}
 
     double get_lambda_zero() { return lambda0; }
 
