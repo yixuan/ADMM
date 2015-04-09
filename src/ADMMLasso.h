@@ -70,8 +70,8 @@ protected:
 
     virtual void regular_update(VectorXd &res)
     {
-        VectorXd rhs = XY - dual_y;
-        rhs += rho * aux_z;
+        VectorXd rhs = XY - adj_y;
+        rhs += rho * adj_z;
         res = (datX.transpose() * datX + rho * MatrixXd::Identity(dim_main, dim_main)).llt().solve(rhs);
     }
 
@@ -81,7 +81,7 @@ protected:
     }
     void next_z(SparseVector &res)
     {
-        VectorXd vec = main_x + dual_y / rho;
+        VectorXd vec = main_x + adj_y / rho;
         soft_threshold(res, vec, lambda / rho);
     }
     void rho_changed_action() {}
@@ -119,12 +119,15 @@ public:
         main_x.setZero();
         aux_z.setZero();
         dual_y.setZero();
+        adj_z.setZero();
+        adj_y.setZero();
         lambda = lambda_;
         rho = lambda_ / rho_ratio_;
         eps_primal = 0.0;
         eps_dual = 0.0;
         resid_primal = 9999;
         resid_dual = 9999;
+        adj_a = 1.0;
 
         rho_changed_action();
     }

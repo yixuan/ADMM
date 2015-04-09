@@ -24,6 +24,12 @@ protected:
     VecTypeX main_x;  // parameters to be optimized
     VecTypeZ aux_z;   // auxiliary parameters
     VectorXd dual_y;  // Lagrangian multiplier
+    VecTypeZ adj_z;
+    VectorXd adj_y;
+    VecTypeZ old_z;
+    VectorXd old_y;
+    double adj_a;
+    double adj_c;
 
     double rho;      // augmented Lagrangian parameter
     double eps_abs;  // absolute tolerance
@@ -83,12 +89,12 @@ protected:
     // increase or decrease rho in iterations
     virtual void update_rho()
     {
-        if(resid_primal > 10 * resid_dual)
+        if(resid_primal > 100 * resid_dual)
         {
             rho *= 2;
             rho_changed_action();
         }
-        else if(resid_dual > 10 * resid_primal)
+        else if(resid_dual > 100 * resid_primal)
         {
             rho *= 0.5;
             rho_changed_action();
@@ -100,6 +106,7 @@ public:
              double eps_abs_ = 1e-6, double eps_rel_ = 1e-6) :
         dim_main(n_), dim_aux(m_), dim_dual(p_),
         main_x(n_), aux_z(m_), dual_y(p_),  // allocate space but do not set values
+        adj_z(m_), adj_y(p_), adj_a(1.0), adj_c(9999),
         eps_abs(eps_abs_), eps_rel(eps_rel_)
     {}
 
@@ -159,7 +166,7 @@ public:
 
         resid_primal = newr.norm();
 
-        dual_y.noalias() += rho * newr;
+        dual_y.noalias() = adj_y + rho * newr;
     }
 
     void debuginfo()
@@ -188,6 +195,9 @@ public:
 
         for(i = 0; i < maxit; i++)
         {
+            old_z = aux_z;
+            old_y = dual_y;
+
             #if ADMM_PROFILE > 1
             t1 = clock();
             #endif
@@ -212,6 +222,27 @@ public:
             t2 = clock();
             ty += double(t2 - t1) / CLOCKS_PER_SEC;
             #endif
+
+            VecTypeZ tmp = aux_z - adj_z;
+            VectorXd tmp2;
+            B_mult(tmp2, tmp);
+
+            double old_c = adj_c;
+            adj_c = rho * resid_primal * resid_primal + rho * tmp2.squaredNorm();
+
+            if(adj_c < 0.9 * old_c)
+            {
+                double old_a = adj_a;
+                adj_a = 0.5 + 0.5 * std::sqrt(1 + 4.0 * old_a * old_a);
+                double ratio = (old_a - 1.0) / adj_a;
+                adj_z = (1 + ratio) * aux_z - ratio * old_z;
+                adj_y = (1 + ratio) * dual_y - ratio * old_y;
+            } else {
+                adj_a = 1.0;
+                adj_z = old_z;
+                adj_y = old_y;
+                adj_c = old_c / 0.9;
+            }
 
             // debuginfo();
             if(converged())
