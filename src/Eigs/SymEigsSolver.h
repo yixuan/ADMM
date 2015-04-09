@@ -29,20 +29,24 @@ private:
     MatOp<Scalar> *op;   // object to conduct matrix operation,
                          // e.g. matrix-vector product
     const int dim_n;     // dimension of matrix A
-    const int nev;       // number of eigenvalues requested
-    int nev_updated;     // increase nev in factorizatio if needed
-    const int ncv;       // number of ritz values
 
 protected:
-    int nmatop;          // number of matrix operations called
+    const int nev;       // number of eigenvalues requested
 
 private:
+    int nev_updated;     // increase nev in factorizatio if needed
+    const int ncv;       // number of ritz values
+    int nmatop;          // number of matrix operations called
     int niter;           // number of restarting iterations
+
     Matrix fac_V;        // V matrix in the Arnoldi factorization
     Matrix fac_H;        // H matrix in the Arnoldi factorization
     Vector fac_f;        // residual in the Arnoldi factorization
 
+protected:
     Vector ritz_val;     // ritz values
+
+private:
     Matrix ritz_vec;     // ritz vectors
     BoolArray ritz_conv; // indicator of the convergence of ritz values
 
@@ -55,7 +59,6 @@ private:
     virtual void matrix_operation(Scalar *x_in, Scalar *y_out)
     {
         op->prod(x_in, y_out);
-        nmatop++;
     }
 
     // Arnoldi factorization starting from step-k
@@ -78,6 +81,7 @@ private:
             fac_H(i, i - 1) = beta;
 
             matrix_operation(v.data(), w.data());
+            nmatop++;
 
             Hii = v.dot(w);
             fac_H(i - 1, i) = beta;
@@ -113,7 +117,7 @@ private:
         for(int i = k; i < ncv; i++)
         {
             // QR decomposition of H-mu*I, mu is the shift
-            fac_H.diagonal() = fac_H.diagonal().array() - ritz_val[i];
+            fac_H.diagonal().array() -= ritz_val[i];
             decomp.compute(fac_H);
 
             // V -> VQ
@@ -122,7 +126,7 @@ private:
             // Since QR = H - mu * I, we have H = QR + mu * I
             // and therefore Q'HQ = RQ + mu * I
             fac_H = decomp.matrix_RQ();
-            fac_H.diagonal() = fac_H.diagonal().array() + ritz_val[i];
+            fac_H.diagonal().array() += ritz_val[i];
             // em -> Q'em
             decomp.apply_QtY(em);
         }
@@ -200,6 +204,7 @@ private:
         }
     }
 
+protected:
     // Sort the first nev Ritz pairs in decreasing magnitude order
     // This is used to return the final results
     virtual void sort_ritzpair()
@@ -275,6 +280,7 @@ public:
 
         Vector w(dim_n);
         matrix_operation(v.data(), w.data());
+        nmatop++;
 
         fac_H(0, 0) = v.dot(w);
         fac_f = w - v * fac_H(0, 0);
@@ -382,7 +388,6 @@ private:
     void matrix_operation(Scalar *x_in, Scalar *y_out)
     {
         op_shift->shift_solve(x_in, y_out);
-        this->nmatop++;
     }
 
     // First transform back the ritz values, and then sort
