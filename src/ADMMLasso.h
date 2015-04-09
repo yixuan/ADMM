@@ -77,7 +77,7 @@ protected:
             res /= rho;
         }
     }
-    void next_z(SparseVector &res)
+    virtual void next_z(SparseVector &res)
     {
         VectorXd vec = main_x + adj_y / rho;
         soft_threshold(res, vec, lambda / rho);
