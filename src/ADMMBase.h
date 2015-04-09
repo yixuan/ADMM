@@ -17,23 +17,24 @@ class ADMMBase
 protected:
     typedef Eigen::VectorXd VectorXd;
 
-    int dim_main;  // dimension of x
-    int dim_aux;   // dimension of z
-    int dim_dual;  // dimension of Ax + Bz - c
+    int dim_main;     // dimension of x
+    int dim_aux;      // dimension of z
+    int dim_dual;     // dimension of Ax + Bz - c
 
     VecTypeX main_x;  // parameters to be optimized
     VecTypeZ aux_z;   // auxiliary parameters
     VectorXd dual_y;  // Lagrangian multiplier
-    VecTypeZ adj_z;
-    VectorXd adj_y;
-    VecTypeZ old_z;
-    VectorXd old_y;
-    double adj_a;
-    double adj_c;
 
-    double rho;      // augmented Lagrangian parameter
-    double eps_abs;  // absolute tolerance
-    double eps_rel;  // relative tolerance
+    VecTypeZ adj_z;   // adjusted z vector, used for acceleration
+    VectorXd adj_y;   // adjusted y vector, used for acceleration
+    VecTypeZ old_z;   // z vector in the previous iteration, used for acceleration
+    VectorXd old_y;   // y vector in the previous iteration, used for acceleration
+    double adj_a;     // coefficient used for acceleration
+    double adj_c;     // coefficient used for acceleration
+
+    double rho;       // augmented Lagrangian parameter
+    double eps_abs;   // absolute tolerance
+    double eps_rel;   // relative tolerance
 
     double eps_primal;  // tolerance for primal residual
     double eps_dual;    // tolerance for dual residual
@@ -86,19 +87,51 @@ protected:
 
         return yres.norm() * eps_rel + sqrt(double(dim_main)) * eps_abs;
     }
+    // calculating dual residual
+    virtual double compute_resid_dual(VecTypeZ &zdiff)
+    {
+        #if ADMM_PROFILE > 1
+        clock_t t1, t2;
+        t1 = clock();
+        #endif
+
+        // zdiff = newz - oldz
+        // calculating A'B(newz - oldz)
+        VectorXd tmp;
+        B_mult(tmp, zdiff);
+
+        VectorXd dual;
+        At_mult(dual, tmp);
+
+        #if ADMM_PROFILE > 1
+        t2 = clock();
+        Rcpp::Rcout << "matrix product in computing resid_dual: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
+        #endif
+
+        return rho * dual.norm();
+    }
+    // calculating combined residual c
+    virtual double compute_resid_combined()
+    {
+        VecTypeZ tmp = aux_z - adj_z;
+        VectorXd tmp2;
+        B_mult(tmp2, tmp);
+
+        return rho * resid_primal * resid_primal + rho * tmp2.squaredNorm();
+    }
     // increase or decrease rho in iterations
     virtual void update_rho()
     {
-        if(resid_primal > 100 * resid_dual)
+        /* if(resid_primal > 10 * resid_dual)
         {
             rho *= 2;
             rho_changed_action();
         }
-        else if(resid_dual > 100 * resid_primal)
+        else if(resid_dual > 10 * resid_primal)
         {
             rho *= 0.5;
             rho_changed_action();
-        }
+        } */
     }
 
 public:
@@ -139,23 +172,7 @@ public:
 
         // calculating A'B(newz - oldz)
         VecTypeZ zdiff = newz - aux_z;
-        VectorXd tmp;
-        B_mult(tmp, zdiff);
-        VectorXd dual;
-
-        #if ADMM_PROFILE > 1
-        clock_t t1, t2;
-        t1 = clock();
-        #endif
-
-        At_mult(dual, tmp);
-
-        #if ADMM_PROFILE > 1
-        t2 = clock();
-        Rcpp::Rcout << "matrix product in z update: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
-        #endif
-
-        resid_dual = rho * dual.norm();
+        resid_dual = compute_resid_dual(zdiff);
 
         aux_z.swap(newz);
     }
@@ -223,12 +240,8 @@ public:
             ty += double(t2 - t1) / CLOCKS_PER_SEC;
             #endif
 
-            VecTypeZ tmp = aux_z - adj_z;
-            VectorXd tmp2;
-            B_mult(tmp2, tmp);
-
             double old_c = adj_c;
-            adj_c = rho * resid_primal * resid_primal + rho * tmp2.squaredNorm();
+            adj_c = compute_resid_combined();
 
             if(adj_c < 0.9 * old_c)
             {

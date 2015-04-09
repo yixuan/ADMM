@@ -9,15 +9,14 @@
 //
 // In ADMM form,
 //   minimize f(x) + g(z)
-//   s.t. Ax + z = c
+//   s.t. x - z = 0
 //
 // x => beta
 // z => -X * beta
 // A => X
 // b => y
-// c => 0
-// f(x) => lambda * ||x||_1
-// g(z) => 1/2 * ||z + b||^2
+// f(x) => 1/2 * ||Ax - b||^2
+// g(z) => lambda * ||z||_1
 class ADMMLasso: public ADMMBase< Eigen::VectorXd, Eigen::SparseVector<double> >
 {
 protected:
@@ -27,31 +26,28 @@ protected:
     typedef Eigen::Map<const MatrixXd> MapMat;
     typedef Eigen::Map<const VectorXd> MapVec;
     typedef Eigen::SparseVector<double> SparseVector;
+    typedef Eigen::LLT<MatrixXd> LLT;
 
     const MapMat datX;            // pointer to data matrix
     const MapVec datY;            // pointer response vector
     const VectorXd XY;            // X'Y
+    LLT solver;                   // matrix factorization
+
     double lambda;                // L1 penalty
     double lambda0;               // minimum lambda to make coefficients all zero
 
-    void A_mult (VectorXd &res, VectorXd &x) // x -> Ax
-    {
-        res.swap(x);
-    }
-    void At_mult(VectorXd &res, VectorXd &y) // y -> A'y
-    {
-        res.swap(y);
-    }
-    void B_mult (VectorXd &res, SparseVector &z) // z -> Bz
-    {
-        res = -z;
-    }
-    double c_norm() { return 0.0; } // ||c||_2
-    void next_residual(VectorXd &res)
-    {
-        res = main_x;
-        res -= aux_z;
-    }
+
+
+    // x -> Ax
+    void A_mult (VectorXd &res, VectorXd &x)  { res.swap(x); }
+    // y -> A'y
+    void At_mult(VectorXd &res, VectorXd &y)  { res.swap(y); }
+    // z -> Bz
+    void B_mult (VectorXd &res, SparseVector &z) { res = -z; }
+    // ||c||_2
+    double c_norm() { return 0.0; }
+
+
 
     static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
     {
@@ -67,24 +63,48 @@ protected:
                 res.insertBack(i) = ptr[i] + penalty;
         }
     }
-
-    virtual void regular_update(VectorXd &res)
+    void next_x(VectorXd &res)
     {
         VectorXd rhs = XY - adj_y;
         rhs += rho * adj_z;
-        res = (datX.transpose() * datX + rho * MatrixXd::Identity(dim_main, dim_main)).llt().solve(rhs);
-    }
-
-    void next_x(VectorXd &res)
-    {
-        regular_update(res);
+        res = solver.solve(rhs);
     }
     void next_z(SparseVector &res)
     {
         VectorXd vec = main_x + adj_y / rho;
         soft_threshold(res, vec, lambda / rho);
     }
-    void rho_changed_action() {}
+    void next_residual(VectorXd &res)
+    {
+        res = main_x;
+        res -= aux_z;
+    }
+    void rho_changed_action()
+    {
+        solver.compute(datX.transpose() * datX + rho * MatrixXd::Identity(dim_main, dim_main));
+    }
+
+
+
+    // Faster computation of epsilons and residuals
+    double compute_eps_primal()
+    {
+        double r = std::max(main_x.norm(), aux_z.norm());
+        return r * eps_rel + std::sqrt(double(dim_dual)) * eps_abs;
+    }
+    double compute_eps_dual()
+    {
+        return dual_y.norm() * eps_rel + sqrt(double(dim_main)) * eps_abs;
+    }
+    double compute_resid_dual(SparseVector &zdiff)
+    {
+        return rho * zdiff.norm();
+    }
+    double compute_resid_combined()
+    {
+        SparseVector tmp = aux_z - adj_z;
+        return rho * resid_primal * resid_primal + rho * tmp.squaredNorm();
+    }
 
 public:
     ADMMLasso(const MatrixXd &datX_, const VectorXd &datY_,
