@@ -2,6 +2,7 @@
 #define ADMMBASE_H
 
 #include <RcppEigen.h>
+#include <iomanip>
 
 // #define ADMM_PROFILE 2
 
@@ -186,13 +187,28 @@ public:
         dual_y.noalias() = adj_y + rho * newr;
     }
 
-    void debuginfo()
+    void debug_info_header()
     {
-        Rcpp::Rcout << "eps_primal = " << eps_primal << std::endl;
-        Rcpp::Rcout << "resid_primal = " << resid_primal << std::endl;
-        Rcpp::Rcout << "eps_dual = " << eps_dual << std::endl;
-        Rcpp::Rcout << "resid_dual = " << resid_dual << std::endl;
-        Rcpp::Rcout << "rho = " << rho << std::endl;
+        const char sep = ' ';
+        const int width = 15;
+        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << "eps_primal";
+        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << "resid_primal";
+        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << "eps_dual";
+        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << "resid_dual";
+        Rcpp::Rcout << std::left << std::setw(10) << std::setfill(sep) << "rho";
+        Rcpp::Rcout << "restarted" << std::endl;
+    }
+
+    void debug_info()
+    {
+        const char sep = ' ';
+        const int width = 15;
+        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << eps_primal;
+        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << resid_primal;
+        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << eps_dual;
+        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << resid_dual;
+        Rcpp::Rcout << std::left << std::setw(10) << std::setfill(sep) << rho;
+        Rcpp::Rcout << (adj_a == 1.0) << std::endl;
     }
 
     bool converged()
@@ -209,6 +225,8 @@ public:
         double tx = 0, tz = 0, ty = 0;
         clock_t t1, t2;
         #endif
+
+        // debug_info_header();
 
         for(i = 0; i < maxit; i++)
         {
@@ -257,7 +275,7 @@ public:
                 adj_c = old_c / 0.9;
             }
 
-            // debuginfo();
+            // debug_info();
             if(converged())
                 break;
         }
