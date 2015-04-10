@@ -12,8 +12,8 @@ using Rcpp::NumericVector;
 using Rcpp::NumericMatrix;
 using Rcpp::Named;
 
-typedef Eigen::Map<MatrixXd> MapMat;
-typedef Eigen::Map<VectorXd> MapVec;
+typedef Eigen::Map<const MatrixXd> MapMat;
+typedef Eigen::Map<const VectorXd> MapVec;
 typedef Eigen::SparseVector<double> SpVec;
 typedef Eigen::SparseMatrix<double> SpMat;
 
@@ -26,21 +26,23 @@ BEGIN_RCPP
     t1 = clock();
 #endif
 
-    const MapMat datX(as<MapMat>(x_));
-    const MapVec datY(as<MapVec>(y_));
+    NumericMatrix x(x_);
+    NumericVector y(y_);
+    const MapMat datX(x.begin(), x.nrow(), x.ncol());
+    const MapVec datY(y.begin(), y.length());
 
     List opts(opts_);
     int maxit = as<int>(opts["maxit"]);
     double eps_abs = as<double>(opts["eps_abs"]);
     double eps_rel = as<double>(opts["eps_rel"]);
-    double rho_ratio = as<double>(opts["rho_ratio"]);
+    double rho = as<double>(opts["rho"]);
 
 #if ADMM_PROFILE > 0
     t2 = clock();
     Rcpp::Rcout << "part1: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs.\n";
 #endif
 
-    ADMMBP solver(datX, datY, rho_ratio, eps_abs, eps_rel);
+    ADMMBP solver(datX, datY, rho, eps_abs, eps_rel);
 
 #if ADMM_PROFILE > 0
     t1 = clock();
