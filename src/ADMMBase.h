@@ -290,9 +290,9 @@ public:
         return i + 1;
     }
 
-    VecTypeX get_x() { return main_x; }
-    VecTypeZ get_z() { return aux_z; }
-    VectorXd get_y() { return dual_y; }
+    virtual VecTypeX get_x() { return main_x; }
+    virtual VecTypeZ get_z() { return aux_z; }
+    virtual VectorXd get_y() { return dual_y; }
 };
 
 

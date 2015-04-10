@@ -93,7 +93,7 @@ private:
     }
     double compute_eps_dual()
     {
-        return dual_y.norm() * eps_rel + sqrt(double(dim_main)) * eps_abs;
+        return dual_y.norm() * eps_rel + std::sqrt(double(dim_main)) * eps_abs;
     }
     double compute_resid_dual(SparseVector &zdiff)
     {
