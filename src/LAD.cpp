@@ -27,13 +27,13 @@ BEGIN_RCPP
 
     int n = datX.rows();
     int p = datX.cols();
-    
+
     List opts(opts_);
     int maxit = as<int>(opts["maxit"]);
     double eps_abs = as<double>(opts["eps_abs"]);
     double eps_rel = as<double>(opts["eps_rel"]);
-    double rho_ratio = as<double>(opts["rho_ratio"]);
-    
+    double rho = as<double>(opts["rho"]);
+
     bool intercept = as<bool>(intercept_);
 
 #if ADMM_PROFILE > 0
@@ -48,8 +48,8 @@ BEGIN_RCPP
     t1 = clock();
     Rcpp::Rcout << "part2: " << double(t1 - t2) / CLOCKS_PER_SEC << " secs.\n";
 #endif
-    
-    ADMMLAD solver(datX, datY, rho_ratio, eps_abs, eps_rel);
+
+    ADMMLAD solver(datX, datY, rho, eps_abs, eps_rel);
 
 #if ADMM_PROFILE > 0
     t2 = clock();

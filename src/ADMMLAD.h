@@ -2,6 +2,7 @@
 #define ADMMLAD_H
 
 #include "ADMMBase.h"
+#include "Linalg/BlasWrapper.h"
 
 // minimize  ||y - X * beta||_1
 //
@@ -15,70 +16,55 @@
 // c => y
 // f(x) => 0
 // g(z) => ||z||_1
+//
+// We define xx := Ax to be the new x variable, which will simplify the problem
+// In ADMM form,
+//   minimize f(xx) + g(z)
+//   s.t. xx - z = c
+//
+// xx => X * beta, xx belongs to Range(X)
+// z  => X * beta - y
+// c  => y
+// f(x) => 0
+// g(z) => ||z||_1
 class ADMMLAD: public ADMMBase< Eigen::VectorXd, Eigen::SparseVector<double> >
 {
 private:
     typedef Eigen::MatrixXd MatrixXd;
     typedef Eigen::VectorXd VectorXd;
     typedef Eigen::ArrayXd ArrayXd;
+    typedef Eigen::Map<const MatrixXd> MapMat;
+    typedef Eigen::Map<const VectorXd> MapVec;
     typedef Eigen::SparseVector<double> SparseVector;
-    typedef Eigen::HouseholderQR<MatrixXd> QRdecomp;
-    typedef Eigen::HouseholderSequence<MatrixXd, VectorXd> QRQ;
+    typedef Eigen::LLT<MatrixXd> LLT;
 
     const MatrixXd *datX;         // pointer to data matrix
     const VectorXd *datY;         // pointer response vector
     double ynorm;                 // L2 norm of datY
 
-    QRdecomp decomp;              // QR decomposition of datX
-    QRQ decomp_Q;                 // Q operator in the QR decomposition
-    VectorXd cache_Ax;            // cache Ax
-    
-    virtual void A_mult(VectorXd &res, VectorXd &x) // x -> Ax
-    {
-        res.noalias() = (*datX) * x;
-    }
-    virtual void At_mult(VectorXd &res, VectorXd &y) // y -> A'y
-    {
-        // The correct operation should be the line below
-        //     res.noalias() = (*datX).transpose() * y;
-        // However, it is too expensive to calculate
-        // A'y (in function compute_eps_dual())
-        // and A'(newz - oldz) (in function update_z())
-        // in every iteration.
-        // Instead, we simply use ||newz - oldz||_2
-        // and ||y||_2 to calculate dual residual and
-        // eps_dual.
-        // In this case, At_mult will be an identity transformation.
-        res.swap(y);
-    }
-    virtual void B_mult (VectorXd &res, SparseVector &z) // z -> Bz
-    {
-        res = -z;
-    }  
-    virtual double c_norm() { return ynorm; } // ||c||_2
-    virtual void next_residual(VectorXd &res)
-    {
-        res.noalias() = cache_Ax - (*datY);
-        res -= aux_z;
-    }
-    
-    virtual void next_x(VectorXd &res)
-    {
-        // We actually do not need to calculate x. Rather,
-        // only Ax is needed to update z and y.
-        // Inside this function we only update Ax, and x
-        // is calculated in get_x().
-        // We also need to override compute_eps_primal() to obtain
-        // the correct value of eps_primal.
+    LLT solver;                   // Cholesky factorization of A'A
 
-        // Ax = Q_1 * Q_1' * (datY + aux_z - dual_y / rho)
-        cache_Ax.noalias() = (*datY) - dual_y / rho;
-        cache_Ax += aux_z;
-        cache_Ax.applyOnTheLeft(decomp_Q.transpose());
-        cache_Ax.tail(dim_dual - dim_main).setZero();
-        cache_Ax.applyOnTheLeft(decomp_Q);
-    }
 
+
+    // x -> Ax
+    void A_mult (VectorXd &res, VectorXd &x)  { res.swap(x); }
+    // y -> A'y
+    void At_mult(VectorXd &res, VectorXd &y)  { res.swap(y); }
+    // z -> Bz
+    void B_mult (VectorXd &res, SparseVector &z) { res = -z; }
+    // ||c||_2
+    double c_norm() { return ynorm; }
+
+
+
+    void next_x(VectorXd &res)
+    {
+        VectorXd vec = (*datY) - adj_y / rho;
+        vec += adj_z;
+
+        VectorXd tmp = (*datX).transpose() * vec;
+        res.noalias() = (*datX) * solver.solve(tmp);
+    }
     static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
     {
         res.setZero();
@@ -93,60 +79,76 @@ private:
                 res.insertBack(i) = ptr[i] + penalty;
         }
     }
-
-    virtual void next_z(SparseVector &res)
+    void next_z(SparseVector &res)
     {
-        VectorXd vec = cache_Ax - (*datY) + dual_y / rho;
+        VectorXd vec = main_x - (*datY) + adj_y / rho;
         soft_threshold(res, vec, 1.0 / rho);
     }
-
-    virtual void rho_changed_action() {}
-
-    // a faster version compared to the base implementation
-    virtual double compute_eps_primal()
+    void next_residual(VectorXd &res)
     {
-        double r = std::max(cache_Ax.norm(), aux_z.norm());
-        r = std::max(r, ynorm);
-        return r * eps_rel + sqrt(double(dim_dual)) * eps_abs;
+        res.noalias() = main_x - (*datY);
+        res -= aux_z;
     }
+    void rho_changed_action() {}
 
-    // a faster version compared to the base implementation
-    virtual double compute_eps_dual()
+
+
+    // Faster computation of epsilons and residuals
+    double compute_eps_primal()
     {
-        return dual_y.norm() * eps_rel + sqrt(double(dim_dual)) * eps_abs;
+        double r = std::max(main_x.norm(), aux_z.norm());
+        r = std::max(r, ynorm);
+        return r * eps_rel + std::sqrt(double(dim_dual)) * eps_abs;
+    }
+    double compute_eps_dual()
+    {
+        return dual_y.norm() * eps_rel + std::sqrt(double(dim_main)) * eps_abs;
+    }
+    double compute_resid_dual(SparseVector &zdiff)
+    {
+        return rho * zdiff.norm();
+    }
+    double compute_resid_combined()
+    {
+        SparseVector tmp = aux_z - adj_z;
+        return rho * resid_primal * resid_primal + rho * tmp.squaredNorm();
     }
 
 public:
     ADMMLAD(const MatrixXd &datX_, const VectorXd &datY_,
-            double rho_ratio_ = 0.1,
+            double rho_ = 1.0,
             double eps_abs_ = 1e-6,
             double eps_rel_ = 1e-6) :
         ADMMBase(datX_.cols(), datX_.rows(), datX_.rows(),
                  eps_abs_, eps_rel_),
         datX(&datX_), datY(&datY_),
-        ynorm(datY_.norm()),
-        decomp(datX_),
-        decomp_Q(decomp.householderQ()),
-        cache_Ax(dim_dual)
+        ynorm(datY_.norm())
     {
+        const MapMat mapX(datX_.data(), datX_.rows(), datX_.cols());
+        MatrixXd AA;
+        Linalg::cross_prod_lower(AA, mapX);
+        solver.compute(AA.triangularView<Eigen::Lower>());
+
         main_x.setZero();
-        cache_Ax.setZero();
         aux_z.setZero();
         dual_y.setZero();
-        rho = 1.0 / rho_ratio_;
+
+        adj_z.setZero();
+        adj_y.setZero();
+
+        rho = rho_;
+
         eps_primal = 0.0;
         eps_dual = 0.0;
         resid_primal = 9999;
         resid_dual = 9999;
     }
-    
-    virtual VectorXd get_x()
+
+    VectorXd get_x()
     {
-        VectorXd vec = (*datY) - dual_y / rho;
-        vec += aux_z;
-        main_x.noalias() = decomp.solve(vec);
-        
-        return main_x;
+        VectorXd vec = (*datY) - adj_y / rho;
+        vec += adj_z;
+        return solver.solve((*datX).transpose() * vec);
     }
 };
 

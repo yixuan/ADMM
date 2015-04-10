@@ -28,7 +28,7 @@ ADMM_LAD$methods(
         .self$maxit = 10000L
         .self$eps_abs = 1e-4
         .self$eps_rel = 1e-4
-        .self$rho_ratio = 0.1
+        .self$rho = 1.0
         .self$intercept = as.logical(intercept)
     }
 )
@@ -45,9 +45,9 @@ ADMM_LAD$methods(
 ## Specify additional parameters
 ADMM_LAD$methods(
     opts = function(maxit = 10000, eps_abs = 1e-4, eps_rel = 1e-4,
-                    rho_ratio = 1, ...)
+                    rho = 1.0, ...)
     {
-        callSuper(maxit, eps_abs, eps_rel, rho_ratio, ...)
+        callSuper(maxit, eps_abs, eps_rel, rho, ...)
         
         invisible(.self)
     }
@@ -61,7 +61,7 @@ ADMM_LAD$methods(
                     list(maxit = .self$maxit,
                          eps_abs = .self$eps_abs,
                          eps_rel = .self$eps_rel,
-                         rho_ratio = .self$rho_ratio),
+                         rho = .self$rho),
                     PACKAGE = "ADMM")
         
         ADMM_LAD_fit(x = .self$x, y = .self$y, beta = res$beta, niter = res$niter)
