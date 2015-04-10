@@ -9,12 +9,29 @@ namespace Linalg {
 
 extern "C"
 {
+    void dgemv_(const char* transA, const int* m, const int* n,
+                const double* alpha, const double* A, const int* ldA,
+                const double* x, const int* incx,
+                const double* beta, double* y, const int* incy);
     void dgemm_(const char* transA, const char* transB, const int* m, const int* n, const int* k,
                 const double* alpha, const double* A, const int* ldA, const double* B, const int* ldB,
                 const double* beta, double* C, const int* ldC);
     void dsyrk_(const char* uplo, const char* transA, const int* n, const int* k,
                 const double* alpha, const double* A, const int* ldA,
                 const double* beta, double* C, const int* ldC);
+}
+
+inline void mat_vec_prod(Eigen::VectorXd &res, const Eigen::MatrixXd &X, const Eigen::VectorXd &v)
+{
+    const double one = 1.0;
+    const double zero = 0.0;
+    const char no_trans = 'N';
+    const int n = X.rows();
+    const int p = X.cols();
+    const int inc = 1;
+
+    res.resize(n);
+    dgemv_(&no_trans, &n, &p, &one, X.data(), &n, v.data(), &inc, &zero, res.data(), &inc);
 }
 
 // Calculating X'X
