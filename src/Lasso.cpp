@@ -14,9 +14,6 @@ using Rcpp::List;
 using Rcpp::Named;
 using Rcpp::IntegerVector;
 
-typedef Eigen::Map<MatrixXd> MapMat;
-typedef Eigen::Map<VectorXd> MapVec;
-typedef Eigen::Map<ArrayXd>  MapArray;
 typedef Eigen::SparseVector<double> SpVec;
 typedef Eigen::SparseMatrix<double> SpMat;
 
