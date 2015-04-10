@@ -1,3 +1,5 @@
+#define EIGEN_DONT_PARALLELIZE
+
 #ifndef ADMMBP_H
 #define ADMMBP_H
 
@@ -51,6 +53,7 @@ private:
 
         VectorXd tmp = (*datX) * vec;
         vec.noalias() = (*datX).transpose() * solver.solve(tmp);
+
         res -= vec;
     }
 

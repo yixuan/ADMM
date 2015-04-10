@@ -6,7 +6,7 @@ ADMM_BP = setRefClass("ADMM_BP",
                                     maxit = "integer",
                                     eps_abs = "numeric",
                                     eps_rel = "numeric",
-                                    rho_ratio = "numeric")
+                                    rho = "numeric")
 )
 
 setClassUnion("CoefType", c("dgCMatrix", "numeric"))
@@ -38,7 +38,7 @@ ADMM_BP$methods(
         .self$maxit = 10000L
         .self$eps_abs = 1e-4
         .self$eps_rel = 1e-4
-        .self$rho_ratio = 0.1
+        .self$rho = 1
     }
 )
 
@@ -78,19 +78,19 @@ ADMM_BP$methods(
 ## Specify additional parameters
 ADMM_BP$methods(
     opts = function(maxit = 10000, eps_abs = 1e-4, eps_rel = 1e-4,
-                    rho_ratio = 0.1, ...)
+                    rho = 1, ...)
     {
         if(maxit <= 0)
             stop("maxit should be positive")
         if(eps_abs < 0 | eps_rel < 0)
             stop("eps_abs and eps_rel should be nonnegative")
-        if(rho_ratio <= 0)
-            stop("rho_ratio should be positive")
+        if(rho <= 0)
+            stop("rho should be positive")
         
         .self$maxit = as.integer(maxit)
         .self$eps_abs = as.numeric(eps_abs)
         .self$eps_rel = as.numeric(eps_rel)
-        .self$rho_ratio = as.numeric(rho_ratio)
+        .self$rho = as.numeric(rho)
         
         invisible(.self)
     }
@@ -105,14 +105,14 @@ ADMM_BP$methods(
                   list(maxit = .self$maxit,
                        eps_abs = .self$eps_abs,
                        eps_rel = .self$eps_rel,
-                       rho_ratio = .self$rho_ratio),
+                       rho = .self$rho),
                   PACKAGE = "ADMM")
         else
             .Call("admm_parbp", .self$x, .self$y, .self$nthread,
                   list(maxit = .self$maxit,
                        eps_abs = .self$eps_abs,
                        eps_rel = .self$eps_rel,
-                       rho_ratio = .self$rho_ratio),
+                       rho_ratio = .self$rho),
                   PACKAGE = "ADMM")
         
         do.call(ADMM_BP_fit, res)
