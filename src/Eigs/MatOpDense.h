@@ -4,6 +4,39 @@
 #include <Eigen/Dense>
 
 template <typename Scalar>
+class MatOpDense: public MatOp<Scalar>
+{
+private:
+    typedef Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> Matrix;
+    typedef Eigen::Map<const Matrix> MapMat;
+    typedef Eigen::Map< Eigen::Matrix<Scalar, Eigen::Dynamic, 1> > MapVec;
+
+    const MapMat mat;
+    MapVec vec_x;
+    MapVec vec_y;
+
+public:
+    MatOpDense(const Matrix &mat_) :
+        MatOp<Scalar>(mat_.rows(), mat_.cols()),
+        mat(mat_.data(), mat_.rows(), mat_.cols()),
+        vec_x(NULL, 1),
+        vec_y(NULL, 1)
+    {}
+
+    virtual ~MatOpDense() {}
+
+    // y_out = A * x_in
+    void prod(Scalar *x_in, Scalar *y_out)
+    {
+        new (&vec_x) MapVec(x_in, mat.cols());
+        new (&vec_y) MapVec(y_out, mat.rows());
+
+        vec_y.noalias() = mat * vec_x;
+    }
+};
+
+
+template <typename Scalar>
 class MatOpXX: public MatOp<Scalar>
 {
 private:
