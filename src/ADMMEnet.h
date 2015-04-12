@@ -55,7 +55,7 @@ public:
         ADMMLasso(datX_, datY_, eps_abs_, eps_rel_),
         alpha(alpha_)
     {
-        lambda0 /= alpha;
+        lambda0 /= (alpha + 0.0001);
     }
 };
 
