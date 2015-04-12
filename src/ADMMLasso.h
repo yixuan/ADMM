@@ -87,16 +87,7 @@ protected:
         res = main_x;
         res -= aux_z;
     }
-    void rho_changed_action()
-    {
-        MatrixXd XX;
-        if(X_is_thin)
-            Linalg::cross_prod_lower(XX, datX);
-        else
-            Linalg::tcross_prod_lower(XX, datX);
-        XX.diagonal().array() += rho;
-        solver.compute(XX.triangularView<Eigen::Lower>());
-    }
+    void rho_changed_action() {}
 
 
 
@@ -159,6 +150,25 @@ public:
 
         lambda = lambda_;
         rho = lambda_ * rho_rel_;
+
+        MatrixXd XX;
+        if(X_is_thin)
+            Linalg::cross_prod_lower(XX, datX);
+        else
+            Linalg::tcross_prod_lower(XX, datX);
+
+        if(rho <= 0)
+        {
+            MatOpDense<double> op(XX);
+            SymEigsSolver<double, LARGEST_ALGE> eigs(&op, 1, 3);
+            eigs.init();
+            eigs.compute(10, 0.1);
+            VectorXd evals = eigs.eigenvalues();
+            rho = std::pow(evals[0], 1.0 / 3) * std::pow(lambda, 2.0 / 3);
+        }
+
+        XX.diagonal().array() += rho;
+        solver.compute(XX.triangularView<Eigen::Lower>());
 
         eps_primal = 0.0;
         eps_dual = 0.0;
