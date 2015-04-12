@@ -172,7 +172,7 @@ public:
         next_z(newz);
 
         // calculating A'B(newz - oldz)
-        VecTypeZ zdiff = newz - aux_z;
+        VecTypeZ zdiff = newz - adj_z;
         resid_dual = compute_resid_dual(zdiff);
 
         aux_z.swap(newz);
@@ -195,6 +195,7 @@ public:
         Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << "resid_primal";
         Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << "eps_dual";
         Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << "resid_dual";
+        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << "resid_combn";
         Rcpp::Rcout << std::left << std::setw(10) << std::setfill(sep) << "rho";
         Rcpp::Rcout << "restarted" << std::endl;
     }
@@ -207,6 +208,7 @@ public:
         Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << resid_primal;
         Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << eps_dual;
         Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << resid_dual;
+        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << adj_c;
         Rcpp::Rcout << std::left << std::setw(10) << std::setfill(sep) << rho;
         Rcpp::Rcout << (adj_a == 1.0) << std::endl;
     }
@@ -258,10 +260,15 @@ public:
             ty += double(t2 - t1) / CLOCKS_PER_SEC;
             #endif
 
+            if(converged())
+                break;
+
             double old_c = adj_c;
             adj_c = compute_resid_combined();
 
-            if(adj_c < 0.9 * old_c)
+            // debug_info();
+
+            if(adj_c < 0.999 * old_c)
             {
                 double old_a = adj_a;
                 adj_a = 0.5 + 0.5 * std::sqrt(1 + 4.0 * old_a * old_a);
@@ -272,12 +279,8 @@ public:
                 adj_a = 1.0;
                 adj_z = old_z;
                 adj_y = old_y;
-                adj_c = old_c / 0.9;
+                adj_c = old_c / 0.999;
             }
-
-            // debug_info();
-            if(converged())
-                break;
         }
 
         #if ADMM_PROFILE > 1
