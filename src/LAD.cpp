@@ -18,8 +18,8 @@ RcppExport SEXP admm_lad(SEXP x_, SEXP y_, SEXP intercept_, SEXP opts_)
 BEGIN_RCPP
 
 #if ADMM_PROFILE > 0
-    clock_t t1, t2;
-    t1 = clock();
+    double t1, t2;
+    t1 = omp_get_wtime();
 #endif
 
     MatrixXd datX(as<MatrixXd>(x_));
@@ -37,23 +37,23 @@ BEGIN_RCPP
     bool intercept = as<bool>(intercept_);
 
 #if ADMM_PROFILE > 0
-    t2 = clock();
-    Rcpp::Rcout << "part1: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs.\n";
+    t2 = omp_get_wtime();
+    Rcpp::Rcout << "part1: " << t2 - t1 << " secs.\n";
 #endif
 
     DataStd datstd(n, p, true, intercept);
     datstd.standardize(datX, datY);
 
 #if ADMM_PROFILE > 0
-    t1 = clock();
-    Rcpp::Rcout << "part2: " << double(t1 - t2) / CLOCKS_PER_SEC << " secs.\n";
+    t1 = omp_get_wtime();
+    Rcpp::Rcout << "part2: " << t1 - t2 << " secs.\n";
 #endif
 
     ADMMLAD solver(datX, datY, rho, eps_abs, eps_rel);
 
 #if ADMM_PROFILE > 0
-    t2 = clock();
-    Rcpp::Rcout << "part3: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs.\n";
+    t2 = omp_get_wtime();
+    Rcpp::Rcout << "part3: " << t2 - t1 << " secs.\n";
 #endif
 
     int niter = solver.solve(maxit);
@@ -62,8 +62,8 @@ BEGIN_RCPP
     datstd.recover(beta[0], beta.tail(p));
 
 #if ADMM_PROFILE > 0
-    t1 = clock();
-    Rcpp::Rcout << "part4: " << double(t1 - t2) / CLOCKS_PER_SEC << " secs.\n";
+    t1 = omp_get_wtime();
+    Rcpp::Rcout << "part4: " << t1 - t2 << " secs.\n";
 #endif
 
     return List::create(Named("beta") = beta,

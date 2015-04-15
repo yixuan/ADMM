@@ -6,6 +6,10 @@
 
 // #define ADMM_PROFILE 2
 
+#ifdef ADMM_PROFILE
+  #include <omp.h>  // for omp_get_wtime()
+#endif
+
 // General problem setting
 //   minimize f(x) + g(z)
 //   s.t. Ax + Bz = c
@@ -75,15 +79,15 @@ protected:
         VectorXd yres, ycopy = dual_y;
 
         #if ADMM_PROFILE > 1
-        clock_t t1, t2;
-        t1 = clock();
+        double t1, t2;
+        t1 = omp_get_wtime();
         #endif
 
         At_mult(yres, ycopy);
 
         #if ADMM_PROFILE > 1
-        t2 = clock();
-        Rcpp::Rcout << "matrix product in computing eps_dual: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
+        t2 = omp_get_wtime();
+        Rcpp::Rcout << "matrix product in computing eps_dual: " << t2 - t1 << " secs\n";
         #endif
 
         return yres.norm() * eps_rel + sqrt(double(dim_main)) * eps_abs;
@@ -92,8 +96,8 @@ protected:
     virtual double compute_resid_dual(VecTypeZ &zdiff)
     {
         #if ADMM_PROFILE > 1
-        clock_t t1, t2;
-        t1 = clock();
+        double t1, t2;
+        t1 = omp_get_wtime();
         #endif
 
         // zdiff = newz - oldz
@@ -105,8 +109,8 @@ protected:
         At_mult(dual, tmp);
 
         #if ADMM_PROFILE > 1
-        t2 = clock();
-        Rcpp::Rcout << "matrix product in computing resid_dual: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
+        t2 = omp_get_wtime();
+        Rcpp::Rcout << "matrix product in computing resid_dual: " << t2 - t1 << " secs\n";
         #endif
 
         return rho * dual.norm();
@@ -153,15 +157,15 @@ public:
         VecTypeX newx(dim_main);
 
         #if ADMM_PROFILE > 1
-        clock_t t1, t2;
-        t1 = clock();
+        double t1, t2;
+        t1 = omp_get_wtime();
         #endif
 
         next_x(newx);
 
         #if ADMM_PROFILE > 1
-        t2 = clock();
-        Rcpp::Rcout << "updating x: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs\n";
+        t2 = omp_get_wtime();
+        Rcpp::Rcout << "updating x: " << t2 - t1 << " secs\n";
         #endif
 
         main_x.swap(newx);
@@ -225,7 +229,7 @@ public:
 
         #if ADMM_PROFILE > 1
         double tx = 0, tz = 0, ty = 0;
-        clock_t t1, t2;
+        double t1, t2;
         #endif
 
         // debug_info_header();
@@ -236,28 +240,28 @@ public:
             old_y = dual_y;
 
             #if ADMM_PROFILE > 1
-            t1 = clock();
+            t1 = omp_get_wtime();
             #endif
 
             update_x();
 
             #if ADMM_PROFILE > 1
-            t2 = clock();
-            tx += double(t2 - t1) / CLOCKS_PER_SEC;
+            t2 = omp_get_wtime();
+            tx += (t2 - t1);
             #endif
 
             update_z();
 
             #if ADMM_PROFILE > 1
-            t1 = clock();
-            tz += double(t1 - t2) / CLOCKS_PER_SEC;
+            t1 = omp_get_wtime();
+            tz += (t1 - t2);
             #endif
 
             update_y();
 
             #if ADMM_PROFILE > 1
-            t2 = clock();
-            ty += double(t2 - t1) / CLOCKS_PER_SEC;
+            t2 = omp_get_wtime();
+            ty += (t2 - t1);
             #endif
 
             if(converged())

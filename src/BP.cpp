@@ -22,8 +22,8 @@ RcppExport SEXP admm_bp(SEXP x_, SEXP y_, SEXP opts_)
 BEGIN_RCPP
 
 #if ADMM_PROFILE > 0
-    clock_t t1, t2;
-    t1 = clock();
+    double t1, t2;
+    t1 = omp_get_wtime();
 #endif
 
     NumericMatrix x(x_);
@@ -38,15 +38,15 @@ BEGIN_RCPP
     double rho = as<double>(opts["rho"]);
 
 #if ADMM_PROFILE > 0
-    t2 = clock();
-    Rcpp::Rcout << "part1: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs.\n";
+    t2 = omp_get_wtime();
+    Rcpp::Rcout << "part1: " << t2 - t1 << " secs.\n";
 #endif
 
     ADMMBP solver(datX, datY, rho, eps_abs, eps_rel);
 
 #if ADMM_PROFILE > 0
-    t1 = clock();
-    Rcpp::Rcout << "part2: " << double(t1 - t2) / CLOCKS_PER_SEC << " secs.\n";
+    t1 = omp_get_wtime();
+    Rcpp::Rcout << "part2: " << t1 - t2 << " secs.\n";
 #endif
 
     int niter = solver.solve(maxit);
@@ -55,8 +55,8 @@ BEGIN_RCPP
     beta.makeCompressed();
 
 #if ADMM_PROFILE > 0
-    t2 = clock();
-    Rcpp::Rcout << "part3: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs.\n";
+    t2 = omp_get_wtime();
+    Rcpp::Rcout << "part3: " << t2 - t1 << " secs.\n";
 #endif
 
     return List::create(Named("beta") = beta,
