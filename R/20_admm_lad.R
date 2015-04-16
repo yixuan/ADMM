@@ -136,7 +136,7 @@ ADMM_LAD_fit$methods(
 #' this method is
 #' 
 #' \preformatted{    model$opts(maxit = 10000, eps_abs = 1e-4, eps_rel = 1e-4,
-#'                rho_ratio = 0.1)
+#'                rho = NULL)
 #' }
 #' 
 #' Here \code{model} is the object returned by \code{admm_lad()}.
@@ -146,7 +146,8 @@ ADMM_LAD_fit$methods(
 #' \item{\code{maxit}}{Maximum number of iterations.}
 #' \item{\code{eps_abs}}{Absolute tolerance parameter.}
 #' \item{\code{eps_rel}}{Relative tolerance parameter.}
-#' \item{\code{rho_ratio}}{ADMM step size parameter.}
+#' \item{\code{rho}}{ADMM step size parameter. If set to \code{NULL}, the program
+#'                   will compute a default one.}
 #' }
 #' 
 #' This member function will implicitly return the "\code{ADMM_LAD}" object itself.
