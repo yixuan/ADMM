@@ -345,6 +345,12 @@ public:
         return res;
     }
 
+    // Return all Ritz values regardless of convergence
+    Vector ritzvalues()
+    {
+        return ritz_val;
+    }
+
     // Return converged eigenvectors
     Matrix eigenvectors()
     {
