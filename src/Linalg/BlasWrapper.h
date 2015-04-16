@@ -34,6 +34,16 @@ inline void mat_vec_prod(Eigen::VectorXd &res, const Eigen::MatrixXd &X, const E
     dgemv_(&no_trans, &n, &p, &one, X.data(), &n, v.data(), &inc, &zero, res.data(), &inc);
 }
 
+inline void mat_vec_prod(double *res, const double *X, const double *v, int n, int p)
+{
+    const double one = 1.0;
+    const double zero = 0.0;
+    const char no_trans = 'N';
+    const int inc = 1;
+
+    dgemv_(&no_trans, &n, &p, &one, X, &n, v, &inc, &zero, res, &inc);
+}
+
 // Calculating X'X
 inline void cross_prod(Eigen::MatrixXd &res, const Eigen::Map<const Eigen::MatrixXd> &X)
 {
