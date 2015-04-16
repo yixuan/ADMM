@@ -84,7 +84,7 @@ Additional options related to ADMM algorithm can be set through the
 this method is
 
 \preformatted{    model$opts(maxit = 10000, eps_abs = 1e-5, eps_rel = 1e-5,
-               rho_ratio = 0.1)
+               rho = NULL)
 }
 
 Here \code{model} is the object returned by \code{admm_dantzig()}.
@@ -94,7 +94,8 @@ Explanation of the arguments is given below:
 \item{\code{maxit}}{Maximum number of iterations.}
 \item{\code{eps_abs}}{Absolute tolerance parameter.}
 \item{\code{eps_rel}}{Relative tolerance parameter.}
-\item{\code{rho_ratio}}{ADMM step size parameter.}
+\item{\code{rho}}{ADMM step size parameter. If set to \code{NULL}, the program
+                  will compute a default one.}
 }
 
 This member function will implicitly return the "\code{ADMM_Dantzig}" object itself.
