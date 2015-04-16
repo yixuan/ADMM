@@ -40,8 +40,8 @@ RcppExport SEXP admm_dantzig(SEXP x_, SEXP y_, SEXP lambda_,
 BEGIN_RCPP
 
 #if ADMM_PROFILE > 0
-    clock_t t1, t2;
-    t1 = clock();
+    double t1, t2;
+    t1 = omp_get_wtime();
 #endif
 
     MatrixXd datX(as<MatrixXd>(x_));
@@ -56,29 +56,29 @@ BEGIN_RCPP
     int maxit = as<int>(opts["maxit"]);
     double eps_abs = as<double>(opts["eps_abs"]);
     double eps_rel = as<double>(opts["eps_rel"]);
-    double rho_ratio = as<double>(opts["rho_ratio"]);
+    double rho = as<double>(opts["rho"]);
 
     bool standardize = as<bool>(standardize_);
     bool intercept = as<bool>(intercept_);
 
 #if ADMM_PROFILE > 0
-    t2 = clock();
-    Rcpp::Rcout << "part1: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs.\n";
+    t2 = omp_get_wtime();
+    Rcpp::Rcout << "part1: " << t2 - t1 << " secs.\n";
 #endif
 
     DataStd datstd(n, p, standardize, intercept);
     datstd.standardize(datX, datY);
 
 #if ADMM_PROFILE > 0
-    t1 = clock();
-    Rcpp::Rcout << "part2: " << double(t1 - t2) / CLOCKS_PER_SEC << " secs.\n";
+    t1 = omp_get_wtime();
+    Rcpp::Rcout << "part2: " << t1 - t2 << " secs.\n";
 #endif
 
     ADMMDantzig solver(datX, datY, eps_abs, eps_rel);
 
 #if ADMM_PROFILE > 0
-    t2 = clock();
-    Rcpp::Rcout << "part3: " << double(t2 - t1) / CLOCKS_PER_SEC << " secs.\n";
+    t2 = omp_get_wtime();
+    Rcpp::Rcout << "part3: " << t2 - t1 << " secs.\n";
 #endif
 
     if(nlambda < 1)
@@ -100,7 +100,7 @@ BEGIN_RCPP
     {
         ilambda = lambda[i] * n / datstd.get_scaleY();
         if(i == 0)
-            solver.init(ilambda, rho_ratio);
+            solver.init(ilambda, rho);
         else
             solver.init_warm(ilambda);
 
@@ -112,8 +112,8 @@ BEGIN_RCPP
     }
 
 #if ADMM_PROFILE > 0
-    t1 = clock();
-    Rcpp::Rcout << "part4: " << double(t1 - t2) / CLOCKS_PER_SEC << " secs.\n";
+    t1 = omp_get_wtime();
+    Rcpp::Rcout << "part4: " << t1 - t2 << " secs.\n";
 #endif
 
     beta.makeCompressed();

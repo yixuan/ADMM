@@ -2,6 +2,9 @@
 #define ADMMDANTZIG_H
 
 #include "ADMMBase.h"
+#include "Linalg/BlasWrapper.h"
+#include "Eigs/SymEigsSolver.h"
+#include "Eigs/MatOpDense.h"
 
 // minimize ||beta||_1
 // s.t. ||X'(X * beta - y)||_inf <= lambda
@@ -22,9 +25,9 @@ protected:
     typedef Eigen::MatrixXd MatrixXd;
     typedef Eigen::VectorXd VectorXd;
     typedef Eigen::ArrayXd ArrayXd;
+    typedef Eigen::Map<const MatrixXd> MapMat;
+    typedef Eigen::Map<const VectorXd> MapVec;
     typedef Eigen::SparseVector<double> SparseVector;
-    typedef Eigen::HouseholderQR<MatrixXd> QRdecomp;
-    typedef Eigen::HouseholderSequence<MatrixXd, VectorXd> QRQ;
 
     const MatrixXd *datX;         // pointer to data matrix
     const VectorXd *datY;         // pointer response vector
@@ -41,7 +44,9 @@ protected:
 
     VectorXd cache_Ax;            // cache Ax
 
-    virtual void A_mult(VectorXd &res, SparseVector &x) // x -> Ax
+
+
+    void A_mult(VectorXd &res, SparseVector &x) // x -> Ax
     {
         if(use_XX)
         {
@@ -51,7 +56,7 @@ protected:
             res.noalias() = (*datX).transpose() * tmp;
         }
     }
-    virtual void At_mult(VectorXd &res, VectorXd &y) // y -> A'y
+    void At_mult(VectorXd &res, VectorXd &y) // y -> A'y
     {
         // The correct operation should be res = A'y.
         // However, it is too expensive to calculate
@@ -64,32 +69,15 @@ protected:
         // In this case, At_mult will be an identity transformation.
         res.swap(y);
     }
-    virtual void B_mult(VectorXd &res, VectorXd &z) // z -> Bz
+    void B_mult(VectorXd &res, VectorXd &z) // z -> Bz
     {
         res.swap(z);
     }
-    virtual double c_norm() { return XY_norm; } // ||c||_2
-    virtual void next_residual(VectorXd &res)
-    {
-        res.noalias() = cache_Ax + aux_z - XY;
-    }
+    double c_norm() { return XY_norm; } // ||c||_2
 
-    static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
-    {
-        res.setZero();
-        res.reserve(vec.size() / 2);
 
-        double *ptr = vec.data();
-        for(int i = 0; i < vec.size(); i++)
-        {
-            if(ptr[i] > penalty)
-                res.insertBack(i) = ptr[i] - penalty;
-            else if(ptr[i] < -penalty)
-                res.insertBack(i) = ptr[i] + penalty;
-        }
-    }
 
-    virtual void active_set_update(SparseVector &res)
+    /*void active_set_update(SparseVector &res)
     {
         double penalty = 1.0 / (rho * sprad);
         VectorXd vec = (*datX) * (cache_Ax + aux_z + dual_y / rho - XY) / sprad;
@@ -108,22 +96,42 @@ protected:
         }
 
         res.prune(0.0);
-    }
-
-    virtual void next_x(SparseVector &res)
+    }*/
+    static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
     {
-        if(iter_counter % 5 == 0 && lambda < lambda0)
+        res.setZero();
+        res.reserve(vec.size() / 2);
+
+        double *ptr = vec.data();
+        for(int i = 0; i < vec.size(); i++)
         {
-            VectorXd vec = (cache_Ax + aux_z + dual_y / rho - XY) / (-sprad);
-            vec = (*datX).transpose() * ((*datX) * vec);
-            vec += main_x;
-            soft_threshold(res, vec, 1.0 / (rho * sprad));
-        } else {
-            active_set_update(res);
+            if(ptr[i] > penalty)
+                res.insertBack(i) = ptr[i] - penalty;
+            else if(ptr[i] < -penalty)
+                res.insertBack(i) = ptr[i] + penalty;
         }
-        iter_counter++;
     }
-    virtual void next_z(VectorXd &res)
+    void next_x(SparseVector &res)
+    {
+        if(lambda > lambda0 - 1e-5)
+        {
+            res.setZero();
+            return;
+        }
+
+        VectorXd rhs = (cache_Ax + adj_z + adj_y / rho - XY) / (-sprad);
+        VectorXd vec;
+        if(use_XX)
+        {
+            vec.noalias() = XX * rhs;
+        } else {
+            VectorXd tmp = (*datX) * rhs;
+            vec.noalias() = (*datX).transpose() * tmp;
+        }
+        vec += main_x;
+        soft_threshold(res, vec, 1.0 / (rho * sprad));
+    }
+    void next_z(VectorXd &res)
     {
         if(use_XX)
         {
@@ -133,7 +141,7 @@ protected:
             cache_Ax.noalias() = (*datX).transpose() * tmp;
         }
 
-        VectorXd z = cache_Ax + dual_y / rho - XY;
+        VectorXd z = cache_Ax + adj_y / rho - XY;
         for(int i = 0; i < res.size(); i++)
         {
             if(z[i] > 0)
@@ -142,40 +150,33 @@ protected:
                 res[i] = std::min(-z[i], lambda);
         }
     }
-    virtual void rho_changed_action() {}
-    // a faster version compared to the base implementation
-    virtual double compute_eps_primal()
+    void next_residual(VectorXd &res)
+    {
+        res.noalias() = cache_Ax + aux_z - XY;
+    }
+    void rho_changed_action() {}
+
+
+
+    // Faster computation of epsilons and residuals
+    double compute_eps_primal()
     {
         double r = std::max(cache_Ax.norm(), aux_z.norm());
         r = std::max(r, XY_norm);
-        return r * eps_rel + sqrt(double(dim_dual)) * eps_abs;
+        return r * eps_rel + std::sqrt(double(dim_dual)) * eps_abs;
     }
-    // a faster version compared to the base implementation
-    virtual double compute_eps_dual()
+    double compute_eps_dual()
     {
-        return dual_y.norm() * eps_rel + sqrt(double(dim_dual)) * eps_abs;
+        return dual_y.norm() * eps_rel + std::sqrt(double(dim_dual)) * eps_abs;
     }
-
-    // calculating the spectral radius of X'X
-    // in this case it is the largest eigenvalue of X'X
-    static double spectral_radius_xx(const MatrixXd &X)
+    double compute_resid_dual(VectorXd &zdiff)
     {
-        Rcpp::NumericMatrix mat = Rcpp::wrap(X);
-
-        Rcpp::Environment ADMM = Rcpp::Environment::namespace_env("ADMM");
-        Rcpp::Function spectral_radius = ADMM[".spectral_radius_xx"];
-        return Rcpp::as<double>(spectral_radius(mat));
+        return rho * zdiff.norm();
     }
-
-    // calculating the spectral radius of X, if X is positive definite
-    // in this case it is the largest eigenvalue of X
-    static double spectral_radius_x(const MatrixXd &X)
+    double compute_resid_combined()
     {
-        Rcpp::NumericMatrix mat = Rcpp::wrap(X);
-
-        Rcpp::Environment ADMM = Rcpp::Environment::namespace_env("ADMM");
-        Rcpp::Function spectral_radius = ADMM[".spectral_radius_x"];
-        return Rcpp::as<double>(spectral_radius(mat));
+        VectorXd tmp = aux_z - adj_z;
+        return rho * resid_primal * resid_primal + rho * tmp.squaredNorm();
     }
 
 public:
@@ -193,26 +194,51 @@ public:
     {
         if(use_XX)
         {
-            XX.noalias() = datX_.transpose() * datX_;
-            sprad = spectral_radius_x(XX);
-        } else {
-            sprad = spectral_radius_xx(datX_);
-        }
+            const MapMat mapX(datX_.data(), datX_.rows(), datX_.cols());
+            Linalg::cross_prod_lower(XX, mapX);
+            XX.triangularView<Eigen::Upper>() = XX.transpose();
 
-        sprad *= sprad;
+            MatOpSymLower<double> op(XX);
+            SymEigsSolver<double, LARGEST_ALGE> eigs(&op, 1, 3);
+            srand(0);
+            eigs.init();
+            eigs.compute(10, 0.1);
+            VectorXd evals = eigs.ritzvalues();
+            sprad = evals[0];
+            sprad *= sprad;
+        } else {
+            MatOpXX<double> op(datX_);
+            SymEigsSolver<double, LARGEST_ALGE> eigs(&op, 1, 3);
+            srand(0);
+            eigs.init();
+            eigs.compute(10, 0.1);
+            VectorXd evals = eigs.ritzvalues();
+            sprad = evals[0];
+            sprad *= sprad;
+        }
     }
 
-    virtual double get_lambda_zero() { return lambda0; }
+    double get_lambda_zero() { return lambda0; }
 
     // init() is a cold start for the first lambda
-    virtual void init(double lambda_, double rho_ratio_)
+    void init(double lambda_, double rho_)
     {
         main_x.setZero();
-        cache_Ax.setZero();
         aux_z.setZero();
         dual_y.setZero();
+
+        adj_z.setZero();
+        adj_y.setZero();
+
+        cache_Ax.setZero();
+
         lambda = lambda_;
-        rho = 1.0 / (rho_ratio_ * sprad);
+        rho = rho_;
+        if(rho <= 0)
+        {
+            rho = 1.0 / std::sqrt(sprad);
+        }
+
         eps_primal = 0.0;
         eps_dual = 0.0;
         resid_primal = 9999;
@@ -223,9 +249,10 @@ public:
     }
     // when computing for the next lambda, we can use the
     // current main_x, aux_z, dual_y and rho as initial values
-    virtual void init_warm(double lambda_)
+    void init_warm(double lambda_)
     {
         lambda = lambda_;
+
         eps_primal = 0.0;
         eps_dual = 0.0;
         resid_primal = 9999;
