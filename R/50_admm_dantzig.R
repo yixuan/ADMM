@@ -37,7 +37,7 @@ ADMM_Dantzig$methods(
                     list(maxit = .self$maxit,
                          eps_abs = .self$eps_abs,
                          eps_rel = .self$eps_rel,
-                         rho_ratio = .self$rho_ratio),
+                         rho = .self$rho),
                     PACKAGE = "ADMM")
         do.call(ADMM_Dantzig_fit, res)
     }

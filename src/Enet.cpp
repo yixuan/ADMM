@@ -58,7 +58,7 @@ BEGIN_RCPP
     int maxit = as<int>(opts["maxit"]);
     double eps_abs = as<double>(opts["eps_abs"]);
     double eps_rel = as<double>(opts["eps_rel"]);
-    double rho_rel = as<double>(opts["rho_rel"]);
+    double rho = as<double>(opts["rho"]);
 
     double alpha = as<double>(alpha_);
 
@@ -104,7 +104,7 @@ BEGIN_RCPP
     {
         ilambda = lambda[i] * n / datstd.get_scaleY();
         if(i == 0)
-            solver.init(ilambda, rho_rel);
+            solver.init(ilambda, rho);
         else
             solver.init_warm(ilambda);
 

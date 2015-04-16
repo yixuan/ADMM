@@ -139,7 +139,7 @@ public:
     double get_lambda_zero() { return lambda0; }
 
     // init() is a cold start for the first lambda
-    void init(double lambda_, double rho_rel_)
+    void init(double lambda_, double rho_)
     {
         main_x.setZero();
         aux_z.setZero();
@@ -149,7 +149,7 @@ public:
         adj_y.setZero();
 
         lambda = lambda_;
-        rho = lambda_ * rho_rel_;
+        rho = rho_;
 
         MatrixXd XX;
         if(X_is_thin)

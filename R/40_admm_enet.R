@@ -57,7 +57,7 @@ ADMM_Enet$methods(
                     list(maxit = .self$maxit,
                          eps_abs = .self$eps_abs,
                          eps_rel = .self$eps_rel,
-                         rho_rel = .self$rho_rel),
+                         rho = .self$rho),
                     PACKAGE = "ADMM")
         do.call(ADMM_Enet_fit, res)
     }
