@@ -73,7 +73,7 @@ protected:
         {
             res = solver.solve(rhs);
         } else {
-            res = rhs -  datX.transpose() * solver.solve(datX * rhs);
+            res = rhs - datX.transpose() * solver.solve(datX * rhs);
             res /= rho;
         }
     }
@@ -159,16 +159,17 @@ public:
 
         if(rho <= 0)
         {
-            MatOpDense<double> op(XX);
+            MatOpSymLower<double> op(XX);
             SymEigsSolver<double, LARGEST_ALGE> eigs(&op, 1, 3);
+            srand(0);
             eigs.init();
             eigs.compute(10, 0.1);
-            VectorXd evals = eigs.eigenvalues();
+            VectorXd evals = eigs.ritzvalues();
             rho = std::pow(evals[0], 1.0 / 3) * std::pow(lambda, 2.0 / 3);
         }
 
         XX.diagonal().array() += rho;
-        solver.compute(XX.triangularView<Eigen::Lower>());
+        solver.compute(XX.selfadjointView<Eigen::Lower>());
 
         eps_primal = 0.0;
         eps_dual = 0.0;
