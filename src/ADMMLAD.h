@@ -127,7 +127,7 @@ public:
         const MapMat mapX(datX_.data(), datX_.rows(), datX_.cols());
         MatrixXd AA;
         Linalg::cross_prod_lower(AA, mapX);
-        solver.compute(AA.triangularView<Eigen::Lower>());
+        solver.compute(AA.selfadjointView<Eigen::Lower>());
 
         main_x.setZero();
         aux_z.setZero();

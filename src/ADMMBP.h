@@ -116,7 +116,7 @@ public:
     {
         MatrixXd AA;
         Linalg::tcross_prod_lower(AA, datX_);
-        solver.compute(AA.triangularView<Eigen::Lower>());
+        solver.compute(AA.selfadjointView<Eigen::Lower>());
         cache_AAAb = datX_.transpose() * solver.solve(datY_);
 
         main_x.setZero();
