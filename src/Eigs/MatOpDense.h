@@ -4,7 +4,7 @@
 #include <Eigen/Dense>
 
 template <typename Scalar>
-class MatOpDense: public MatOp<Scalar>
+class MatOpSymLower: public MatOp<Scalar>
 {
 private:
     typedef Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> Matrix;
@@ -16,14 +16,14 @@ private:
     MapVec vec_y;
 
 public:
-    MatOpDense(const Matrix &mat_) :
+    MatOpSymLower(const Matrix &mat_) :
         MatOp<Scalar>(mat_.rows(), mat_.cols()),
         mat(mat_.data(), mat_.rows(), mat_.cols()),
         vec_x(NULL, 1),
         vec_y(NULL, 1)
     {}
 
-    virtual ~MatOpDense() {}
+    virtual ~MatOpSymLower() {}
 
     // y_out = A * x_in
     void prod(Scalar *x_in, Scalar *y_out)
@@ -31,7 +31,7 @@ public:
         new (&vec_x) MapVec(x_in, mat.cols());
         new (&vec_y) MapVec(y_out, mat.rows());
 
-        vec_y.noalias() = mat * vec_x;
+        vec_y.noalias() = mat.template selfadjointView<Eigen::Lower>() * vec_x;
     }
 };
 
