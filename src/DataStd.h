@@ -1,7 +1,7 @@
 #ifndef DATASTD_H
 #define DATASTD_H
 
-#include <Eigen/Dense>
+#include <Eigen/Core>
 
 class DataStd
 {
@@ -9,6 +9,7 @@ private:
     typedef Eigen::MatrixXd MatrixXd;
     typedef Eigen::VectorXd VectorXd;
     typedef Eigen::ArrayXd ArrayXd;
+    typedef const Eigen::Ref<const VectorXd> ConstGenericVector;
     typedef Eigen::Ref<ArrayXd> Ref;
     typedef Eigen::SparseVector<double> SparseVector;
 
@@ -20,42 +21,30 @@ private:
     //             center x, standardize y
     // flag - 3: standardize = TRUE, intercept = TRUE
     //             standardize x and y
-    int flag;
+    const int flag;
 
-    int n;
-    int p;
+    const int n;
+    const int p;
 
     double meanY;
     double scaleY;
     ArrayXd meanX;
     ArrayXd scaleX;
 public:
-    DataStd(int n, int p, bool standardize, bool intercept)
+    DataStd(int n_, int p_, bool standardize, bool intercept) :
+        flag(int(standardize) + 2 * int(intercept)),
+        n(n_),
+        p(p_),
+        meanY(0.0),
+        scaleY(1.0)
     {
-        this->n = n;
-        this->p = p;
-        this->flag = int(standardize) + 2 * int(intercept);
-        this->meanY = 0.0;
-        this->scaleY = 1.0;
-
-        switch(flag)
-        {
-            case 1:
-                scaleX.resize(p);
-                break;
-            case 2:
-                meanX.resize(p);
-                break;
-            case 3:
-                meanX.resize(p);
-                scaleX.resize(p);
-                break;
-            default:
-                break;
-        }
+        if(flag == 3 || flag == 2)
+            meanX.resize(p);
+        if(flag == 3 || flag == 1)
+            scaleX.resize(p);
     }
 
-    static double sd_n(const Eigen::Ref<Eigen::VectorXd> &v)
+    static double sd_n(ConstGenericVector &v)
     {
         double mean = v.mean();
         VectorXd v_centered = v.array() - mean;
@@ -86,7 +75,6 @@ public:
         }
 
         // standardize X
-
         switch(flag)
         {
             case 1:
@@ -106,10 +94,16 @@ public:
             case 3:
                 for(int i = 0; i < p; i++)
                 {
-                    meanX[i] = X.col(i).mean();
+                    /*meanX[i] = X.col(i).mean();
                     X.col(i).array() -= meanX[i];
                     scaleX[i] = X.col(i).norm() * n_invsqrt;
-                    X.col(i).array() /= scaleX[i];
+                    X.col(i).array() /= scaleX[i];*/
+                    double *begin = &X(0, i);
+                    double *end = begin + n;
+                    meanX[i] = X.col(i).mean();
+                    std::transform(begin, end, begin, std::bind2nd(std::minus<double>(), meanX[i]));
+                    scaleX[i] = X.col(i).norm() * n_invsqrt;
+                    std::transform(begin, end, begin, std::bind2nd(std::multiplies<double>(), 1.0 / scaleX[i]));
                 }
                 break;
             default:
