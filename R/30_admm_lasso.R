@@ -126,7 +126,7 @@ ADMM_Lasso$methods(
         .self$maxit = as.integer(maxit)
         .self$eps_abs = as.numeric(eps_abs)
         .self$eps_rel = as.numeric(eps_rel)
-        .self$rho = if(isNULL(rho))  -1.0  else  as.numeric(rho)
+        .self$rho = if(is.null(rho))  -1.0  else  as.numeric(rho)
         
         invisible(.self)
     }
