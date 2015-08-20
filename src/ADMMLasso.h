@@ -54,7 +54,7 @@ protected:
     static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
     {
         res.setZero();
-        res.reserve(vec.size() / 2);
+        res.reserve(vec.size());
 
         double *ptr = vec.data();
         for(int i = 0; i < vec.size(); i++)
@@ -68,12 +68,15 @@ protected:
     void next_x(VectorXd &res)
     {
         VectorXd rhs = XY - adj_y;
-        rhs += rho * adj_z;
+        // rhs += rho * adj_z;
+        for(Eigen::SparseVector<double>::InnerIterator iter(adj_z); iter; ++iter)
+            rhs[iter.index()] += rho * iter.value();
+
         if(X_is_thin)
         {
-            res = solver.solve(rhs);
+            res.noalias() = solver.solve(rhs);
         } else {
-            res = rhs - datX.transpose() * solver.solve(datX * rhs);
+            res.noalias() = rhs - datX.transpose() * solver.solve(datX * rhs);
             res /= rho;
         }
     }
@@ -84,8 +87,11 @@ protected:
     }
     void next_residual(VectorXd &res)
     {
-        res = main_x;
-        res -= aux_z;
+        res.noalias() = main_x;
+        // res -= aux_z;
+        // manual optimization
+        for(Eigen::SparseVector<double>::InnerIterator iter(aux_z); iter; ++iter)
+            res[iter.index()] -= iter.value();
     }
     void rho_changed_action() {}
 
@@ -107,8 +113,19 @@ protected:
     }
     double compute_resid_combined()
     {
-        SparseVector tmp = aux_z - adj_z;
-        return rho * resid_primal * resid_primal + rho * tmp.squaredNorm();
+        // SparseVector tmp = aux_z - adj_z;
+        // return rho * resid_primal * resid_primal + rho * tmp.squaredNorm();
+
+        // Manual optimization
+        double r = adj_z.squaredNorm();
+        // Iterate on the first sparse vector to calculate the cross terms
+        for(Eigen::SparseVector<double>::InnerIterator iter(aux_z); iter; ++iter)
+        {
+            double v = iter.value();
+            r += v * v - 2 * v * adj_z.coeff(iter.index());
+        }
+
+        return rho * resid_primal * resid_primal + rho * r;
     }
 
 public:
