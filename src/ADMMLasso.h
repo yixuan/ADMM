@@ -97,6 +97,20 @@ protected:
 
 
 
+    // Calculate ||v1 - v2||^2 when v1 and v2 are sparse
+    // \sum (v1i - v2i)^2 = \sum v1i^2 - 2 * \sum v1i * v2i + \sum v2i^2
+    static double diff_squared_norm(const SparseVector &v1, const SparseVector &v2)
+    {
+        double r = v2.squaredNorm();
+        // Iterate on non-zero elements of v1 to calculate the cross terms
+        for(Eigen::SparseVector<double>::InnerIterator iter(v1); iter; ++iter)
+        {
+            double v = iter.value();
+            r += v * v - 2 * v * v2.coeff(iter.index());
+        }
+        return r;
+    }
+
     // Faster computation of epsilons and residuals
     double compute_eps_primal()
     {
@@ -107,25 +121,16 @@ protected:
     {
         return dual_y.norm() * eps_rel + std::sqrt(double(dim_main)) * eps_abs;
     }
-    double compute_resid_dual(SparseVector &zdiff)
+    double compute_resid_dual()
     {
-        return rho * zdiff.norm();
+        return rho * std::sqrt(diff_squared_norm(aux_z, old_z));
     }
     double compute_resid_combined()
     {
         // SparseVector tmp = aux_z - adj_z;
         // return rho * resid_primal * resid_primal + rho * tmp.squaredNorm();
 
-        // Manual optimization
-        double r = adj_z.squaredNorm();
-        // Iterate on the first sparse vector to calculate the cross terms
-        for(Eigen::SparseVector<double>::InnerIterator iter(aux_z); iter; ++iter)
-        {
-            double v = iter.value();
-            r += v * v - 2 * v * adj_z.coeff(iter.index());
-        }
-
-        return rho * resid_primal * resid_primal + rho * r;
+        return rho * resid_primal * resid_primal + rho * diff_squared_norm(aux_z, adj_z);
     }
 
 public:
