@@ -22,27 +22,27 @@ class ADMMBase
 protected:
     typedef Eigen::VectorXd VectorXd;
 
-    int dim_main;     // dimension of x
-    int dim_aux;      // dimension of z
-    int dim_dual;     // dimension of Ax + Bz - c
+    const int dim_main;   // dimension of x
+    const int dim_aux;    // dimension of z
+    const int dim_dual;   // dimension of Ax + Bz - c
 
-    VecTypeX main_x;  // parameters to be optimized
-    VecTypeZ aux_z;   // auxiliary parameters
-    VectorXd dual_y;  // Lagrangian multiplier
+    VecTypeX main_x;      // parameters to be optimized
+    VecTypeZ aux_z;       // auxiliary parameters
+    VectorXd dual_y;      // Lagrangian multiplier
 
-    VecTypeZ adj_z;   // adjusted z vector, used for acceleration
-    VectorXd adj_y;   // adjusted y vector, used for acceleration
-    VecTypeZ old_z;   // z vector in the previous iteration, used for acceleration
-    VectorXd old_y;   // y vector in the previous iteration, used for acceleration
-    double adj_a;     // coefficient used for acceleration
-    double adj_c;     // coefficient used for acceleration
+    VecTypeZ adj_z;       // adjusted z vector, used for acceleration
+    VectorXd adj_y;       // adjusted y vector, used for acceleration
+    VecTypeZ old_z;       // z vector in the previous iteration, used for acceleration
+    VectorXd old_y;       // y vector in the previous iteration, used for acceleration
+    double adj_a;         // coefficient used for acceleration
+    double adj_c;         // coefficient used for acceleration
 
-    double rho;       // augmented Lagrangian parameter
-    double eps_abs;   // absolute tolerance
-    double eps_rel;   // relative tolerance
+    double rho;           // augmented Lagrangian parameter
+    const double eps_abs; // absolute tolerance
+    const double eps_rel; // relative tolerance
 
-    double eps_primal;  // tolerance for primal residual
-    double eps_dual;    // tolerance for dual residual
+    double eps_primal;    // tolerance for primal residual
+    double eps_dual;      // tolerance for dual residual
 
     double resid_primal;  // primal residual
     double resid_dual;    // dual residual
@@ -62,6 +62,7 @@ protected:
     virtual void rho_changed_action() {}
 
     // calculating eps_primal
+    // eps_primal = sqrt(p) * eps_abs + eps_rel * max(||Ax||, ||Bz||, ||c||)
     virtual double compute_eps_primal()
     {
         VectorXd xres, zres;
@@ -71,9 +72,10 @@ protected:
         B_mult(zres, zcopy);
         double r = std::max(xres.norm(), zres.norm());
         r = std::max(r, c_norm());
-        return r * eps_rel + sqrt(double(dim_dual)) * eps_abs;
+        return r * eps_rel + std::sqrt(double(dim_dual)) * eps_abs;
     }
     // calculating eps_dual
+    // eps_dual = sqrt(n) * eps_abs + eps_rel * ||A'y||
     virtual double compute_eps_dual()
     {
         VectorXd yres, ycopy = dual_y;
@@ -90,18 +92,18 @@ protected:
         Rcpp::Rcout << "matrix product in computing eps_dual: " << t2 - t1 << " secs\n";
         #endif
 
-        return yres.norm() * eps_rel + sqrt(double(dim_main)) * eps_abs;
+        return yres.norm() * eps_rel + std::sqrt(double(dim_main)) * eps_abs;
     }
     // calculating dual residual
-    virtual double compute_resid_dual(VecTypeZ &zdiff)
+    // resid_dual = rho * A'B(auxz - oldz)
+    virtual double compute_resid_dual()
     {
         #if ADMM_PROFILE > 1
         double t1, t2;
         t1 = omp_get_wtime();
         #endif
 
-        // zdiff = newz - oldz
-        // calculating A'B(newz - oldz)
+        VecTypeZ zdiff = aux_z - old_z;
         VectorXd tmp;
         B_mult(tmp, zdiff);
 
@@ -115,7 +117,8 @@ protected:
 
         return rho * dual.norm();
     }
-    // calculating combined residual c
+    // calculating combined residual
+    // resid_combined = rho * ||resid_primal||^2 + rho * ||auxz - adjz||^2
     virtual double compute_resid_combined()
     {
         VecTypeZ tmp = aux_z - adj_z;
@@ -174,12 +177,9 @@ public:
     {
         VecTypeZ newz(dim_aux);
         next_z(newz);
-
-        // calculating A'B(newz - oldz)
-        VecTypeZ zdiff = newz - adj_z;
-        resid_dual = compute_resid_dual(zdiff);
-
         aux_z.swap(newz);
+
+        resid_dual = compute_resid_dual();
     }
     void update_y()
     {
