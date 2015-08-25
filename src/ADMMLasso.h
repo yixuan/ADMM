@@ -51,13 +51,14 @@ protected:
 
 
 
-    static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
+    static void soft_threshold(SparseVector &res, const VectorXd &vec, const double &penalty)
     {
+        int v_size = vec.size();
         res.setZero();
-        res.reserve(vec.size());
+        res.reserve(v_size);
 
-        double *ptr = vec.data();
-        for(int i = 0; i < vec.size(); i++)
+        const double *ptr = vec.data();
+        for(int i = 0; i < v_size; i++)
         {
             if(ptr[i] > penalty)
                 res.insertBack(i) = ptr[i] - penalty;
@@ -69,7 +70,7 @@ protected:
     {
         VectorXd rhs = XY - adj_y;
         // rhs += rho * adj_z;
-        for(Eigen::SparseVector<double>::InnerIterator iter(adj_z); iter; ++iter)
+        for(SparseVector::InnerIterator iter(adj_z); iter; ++iter)
             rhs[iter.index()] += rho * iter.value();
 
         if(X_is_thin)
@@ -87,10 +88,12 @@ protected:
     }
     void next_residual(VectorXd &res)
     {
-        res.noalias() = main_x;
+        // res = main_x;
         // res -= aux_z;
+
         // manual optimization
-        for(Eigen::SparseVector<double>::InnerIterator iter(aux_z); iter; ++iter)
+        std::copy(main_x.data(), main_x.data() + dim_main, res.data());
+        for(SparseVector::InnerIterator iter(aux_z); iter; ++iter)
             res[iter.index()] -= iter.value();
     }
     void rho_changed_action() {}
@@ -98,16 +101,41 @@ protected:
 
 
     // Calculate ||v1 - v2||^2 when v1 and v2 are sparse
-    // \sum (v1i - v2i)^2 = \sum v1i^2 - 2 * \sum v1i * v2i + \sum v2i^2
     static double diff_squared_norm(const SparseVector &v1, const SparseVector &v2)
     {
-        double r = v2.squaredNorm();
-        // Iterate on non-zero elements of v1 to calculate the cross terms
-        for(Eigen::SparseVector<double>::InnerIterator iter(v1); iter; ++iter)
+        const int n1 = v1.nonZeros(), n2 = v2.nonZeros();
+        const double *v1_val = v1.valuePtr(), *v2_val = v2.valuePtr();
+        const int *v1_ind = v1.innerIndexPtr(), *v2_ind = v2.innerIndexPtr();
+
+        double r = 0.0;
+        int i1 = 0, i2 = 0;
+        while(i1 < n1 && i2 < n2)
         {
-            double v = iter.value();
-            r += v * v - 2 * v * v2.coeff(iter.index());
+            if(v1_ind[i1] == v2_ind[i2])
+            {
+                double val = v1_val[i1] - v2_val[i2];
+                r += val * val;
+                i1++;
+                i2++;
+            } else if(v1_ind[i1] < v2_ind[i2]) {
+                r += v1_val[i1] * v1_val[i1];
+                i1++;
+            } else {
+                r += v2_val[i2] * v2_val[i2];
+                i2++;
+            }
         }
+        while(i1 < n1)
+        {
+            r += v1_val[i1] * v1_val[i1];
+            i1++;
+        }
+        while(i2 < n2)
+        {
+            r += v2_val[i2] * v2_val[i2];
+            i2++;
+        }
+
         return r;
     }
 
