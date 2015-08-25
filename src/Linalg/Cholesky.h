@@ -1,7 +1,8 @@
 #ifndef SYMMETRICLDL_H
 #define SYMMETRICLDL_H
 
-#include <Eigen/Dense>
+#include <Eigen/Core>
+#include "LapackWrapper.h"
 
 namespace Linalg {
 
