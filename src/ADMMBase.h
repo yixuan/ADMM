@@ -2,13 +2,6 @@
 #define ADMMBASE_H
 
 #include <RcppEigen.h>
-#include <iomanip>
-
-// #define ADMM_PROFILE 2
-
-#ifdef ADMM_PROFILE
-  #include <omp.h>  // for omp_get_wtime()
-#endif
 
 // General problem setting
 //   minimize f(x) + g(z)
@@ -29,13 +22,6 @@ protected:
     VecTypeX main_x;      // parameters to be optimized
     VecTypeZ aux_z;       // auxiliary parameters
     VectorXd dual_y;      // Lagrangian multiplier
-
-    VecTypeZ adj_z;       // adjusted z vector, used for acceleration
-    VectorXd adj_y;       // adjusted y vector, used for acceleration
-    VecTypeZ old_z;       // z vector in the previous iteration, used for acceleration
-    VectorXd old_y;       // y vector in the previous iteration, used for acceleration
-    double adj_a;         // coefficient used for acceleration
-    double adj_c;         // coefficient used for acceleration
 
     double rho;           // augmented Lagrangian parameter
     const double eps_abs; // absolute tolerance
@@ -79,53 +65,22 @@ protected:
     virtual double compute_eps_dual()
     {
         VectorXd yres, ycopy = dual_y;
-
-        #if ADMM_PROFILE > 1
-        double t1, t2;
-        t1 = omp_get_wtime();
-        #endif
-
         At_mult(yres, ycopy);
-
-        #if ADMM_PROFILE > 1
-        t2 = omp_get_wtime();
-        Rcpp::Rcout << "matrix product in computing eps_dual: " << t2 - t1 << " secs\n";
-        #endif
 
         return yres.norm() * eps_rel + std::sqrt(double(dim_main)) * eps_abs;
     }
     // calculating dual residual
     // resid_dual = rho * A'B(auxz - oldz)
-    virtual double compute_resid_dual()
+    virtual double compute_resid_dual(const VecTypeZ &new_z)
     {
-        #if ADMM_PROFILE > 1
-        double t1, t2;
-        t1 = omp_get_wtime();
-        #endif
-
-        VecTypeZ zdiff = aux_z - old_z;
+        VecTypeZ zdiff = new_z - aux_z;
         VectorXd tmp;
         B_mult(tmp, zdiff);
 
         VectorXd dual;
         At_mult(dual, tmp);
 
-        #if ADMM_PROFILE > 1
-        t2 = omp_get_wtime();
-        Rcpp::Rcout << "matrix product in computing resid_dual: " << t2 - t1 << " secs\n";
-        #endif
-
         return rho * dual.norm();
-    }
-    // calculating combined residual
-    // resid_combined = rho * ||resid_primal||^2 + rho * ||auxz - adjz||^2
-    virtual double compute_resid_combined()
-    {
-        VecTypeZ tmp = aux_z - adj_z;
-        VectorXd tmp2;
-        B_mult(tmp2, tmp);
-
-        return rho * resid_primal * resid_primal + rho * tmp2.squaredNorm();
     }
     // increase or decrease rho in iterations
     virtual void update_rho()
@@ -147,7 +102,6 @@ public:
              double eps_abs_ = 1e-6, double eps_rel_ = 1e-6) :
         dim_main(n_), dim_aux(m_), dim_dual(p_),
         main_x(n_), aux_z(m_), dual_y(p_),  // allocate space but do not set values
-        adj_z(m_), adj_y(p_), adj_a(1.0), adj_c(9999),
         eps_abs(eps_abs_), eps_rel(eps_rel_)
     {}
 
@@ -158,28 +112,17 @@ public:
         update_rho();
 
         VecTypeX newx(dim_main);
-
-        #if ADMM_PROFILE > 1
-        double t1, t2;
-        t1 = omp_get_wtime();
-        #endif
-
         next_x(newx);
-
-        #if ADMM_PROFILE > 1
-        t2 = omp_get_wtime();
-        Rcpp::Rcout << "updating x: " << t2 - t1 << " secs\n";
-        #endif
-
         main_x.swap(newx);
     }
     void update_z()
     {
         VecTypeZ newz(dim_aux);
         next_z(newz);
-        aux_z.swap(newz);
 
-        resid_dual = compute_resid_dual();
+        resid_dual = compute_resid_dual(newz);
+
+        aux_z.swap(newz);
     }
     void update_y()
     {
@@ -188,33 +131,9 @@ public:
 
         resid_primal = newr.norm();
 
-        dual_y.noalias() = adj_y + rho * newr;
-    }
-
-    void debug_info_header()
-    {
-        const char sep = ' ';
-        const int width = 15;
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << "eps_primal";
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << "resid_primal";
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << "eps_dual";
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << "resid_dual";
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << "resid_combn";
-        Rcpp::Rcout << std::left << std::setw(10) << std::setfill(sep) << "rho";
-        Rcpp::Rcout << "restarted" << std::endl;
-    }
-
-    void debug_info()
-    {
-        const char sep = ' ';
-        const int width = 15;
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << eps_primal;
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << resid_primal;
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << eps_dual;
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << resid_dual;
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << adj_c;
-        Rcpp::Rcout << std::left << std::setw(10) << std::setfill(sep) << rho;
-        Rcpp::Rcout << (adj_a == 1.0) << std::endl;
+        // dual_y.noalias() += rho * newr;
+        std::transform(newr.data(), newr.data() + dim_dual, newr.data(), std::bind2nd(std::multiplies<double>(), rho));
+        std::transform(dual_y.data(), dual_y.data() + dim_dual, newr.data(), dual_y.data(), std::plus<double>());
     }
 
     bool converged()
@@ -227,72 +146,15 @@ public:
     {
         int i;
 
-        #if ADMM_PROFILE > 1
-        double tx = 0, tz = 0, ty = 0;
-        double t1, t2;
-        #endif
-
-        // debug_info_header();
-
         for(i = 0; i < maxit; i++)
         {
-            old_z = aux_z;
-            old_y = dual_y;
-
-            #if ADMM_PROFILE > 1
-            t1 = omp_get_wtime();
-            #endif
-
             update_x();
-
-            #if ADMM_PROFILE > 1
-            t2 = omp_get_wtime();
-            tx += (t2 - t1);
-            #endif
-
             update_z();
-
-            #if ADMM_PROFILE > 1
-            t1 = omp_get_wtime();
-            tz += (t1 - t2);
-            #endif
-
             update_y();
-
-            #if ADMM_PROFILE > 1
-            t2 = omp_get_wtime();
-            ty += (t2 - t1);
-            #endif
 
             if(converged())
                 break;
-
-            double old_c = adj_c;
-            adj_c = compute_resid_combined();
-
-            // debug_info();
-
-            if(adj_c < 0.999 * old_c)
-            {
-                double old_a = adj_a;
-                adj_a = 0.5 + 0.5 * std::sqrt(1 + 4.0 * old_a * old_a);
-                double ratio = (old_a - 1.0) / adj_a;
-                adj_z = (1 + ratio) * aux_z - ratio * old_z;
-                adj_y = (1 + ratio) * dual_y - ratio * old_y;
-            } else {
-                adj_a = 1.0;
-                adj_z = old_z;
-                adj_y = old_y;
-                adj_c = old_c / 0.999;
-            }
         }
-
-        #if ADMM_PROFILE > 1
-        Rcpp::Rcout << "time - x: " << tx << " secs\n";
-        Rcpp::Rcout << "time - z: " << tz << " secs\n";
-        Rcpp::Rcout << "time - y: " << ty << " secs\n";
-        Rcpp::Rcout << "time - x + y + z: " << tx + ty + tz << " secs\n";
-        #endif
 
         return i + 1;
     }
