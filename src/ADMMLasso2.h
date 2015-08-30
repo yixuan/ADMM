@@ -118,7 +118,7 @@ protected:
     {
         const double gamma = sprad;
         double penalty = lambda / (rho * gamma);
-        VectorXd vec = (cache_Ax + adj_z + adj_y / rho) / gamma;
+        VectorXd vec = (cache_Ax + aux_z + dual_y / rho) / gamma;
         res = main_x;
 
         double *val_ptr = res.valuePtr();
@@ -150,8 +150,9 @@ protected:
         if(iter_counter % 10 == 0 && lambda < lambda0)
         {
             const double gamma = sprad;
-            VectorXd vec = cache_Ax + adj_z + adj_y / rho;
-            vec = -datX.transpose() * vec / gamma;
+            VectorXd tmp = cache_Ax + aux_z + dual_y / rho;
+            VectorXd vec(dim_main);
+            vec.noalias() = -datX.transpose() * tmp / gamma;
             vec += main_x;
             soft_threshold(res, vec, lambda / (rho * gamma));
         } else {
@@ -210,7 +211,7 @@ protected:
         cache_Ax.noalias() = datX * main_x;
 #endif
 
-        res.noalias() = (datY + adj_y + rho * cache_Ax) / (-1 - rho);
+        res.noalias() = (datY + dual_y + rho * cache_Ax) / (-1 - rho);
     }
     void next_residual(VectorXd &res)
     {
@@ -229,13 +230,9 @@ protected:
     {
         return std::sqrt(sprad) * dual_y.norm() * eps_rel + std::sqrt(double(dim_main)) * eps_abs;
     }
-    double compute_resid_dual()
+    double compute_resid_dual(const VectorXd &new_z)
     {
-        return rho * std::sqrt(sprad) * (aux_z - old_z).norm();
-    }
-    double compute_resid_combined()
-    {
-        return rho * resid_primal * resid_primal + rho * (aux_z - adj_z).squaredNorm();
+        return rho * std::sqrt(sprad) * (new_z - aux_z).norm();
     }
 
 public:
@@ -293,9 +290,6 @@ public:
         aux_z.setZero();
         dual_y.setZero();
 
-        adj_z.setZero();
-        adj_y.setZero();
-
         lambda = lambda_;
         rho = std::pow(lambda / sprad, 1.0 / 3);
 
@@ -305,9 +299,6 @@ public:
         resid_dual = 9999;
 
         iter_counter = 0;
-
-        adj_a = 1.0;
-        adj_c = 9999;
 
         rho_changed_action();
     }
