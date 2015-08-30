@@ -6,6 +6,10 @@
 #include "Eigs/SymEigsSolver.h"
 #include "Eigs/MatOpDense.h"
 
+#ifdef __AVX__
+#include <immintrin.h>
+#endif
+
 // minimize  1/2 * ||y - X * beta||^2 + lambda * ||beta||_1
 //
 // In ADMM form,
@@ -73,6 +77,43 @@ protected:
         }
     }
 
+#ifdef __AVX__
+    static double inner_product_avx(const double *x, const double *y, int len)
+    {
+        __m256d xx;
+        __m256d yy;
+        __m256d res = _mm256_setzero_pd();
+
+        double r = 0.0;
+
+        const char rem = (unsigned long)x % 32;
+        const char head = rem ? (32 - rem) / sizeof(double) : 0;
+
+        for(int i = 0; i < head; i++, x++, y++)
+            r += (*x) * (*y);
+
+        const int npack = (len - head) / 8;
+
+        for(int i = 0; i < npack; i++, x += 8, y += 8)
+        {
+            xx = _mm256_load_pd(x);
+            yy = _mm256_loadu_pd(y);
+            res = _mm256_add_pd(res, _mm256_mul_pd(xx, yy));
+
+            xx = _mm256_load_pd(x + 4);
+            yy = _mm256_loadu_pd(y + 4);
+            res = _mm256_add_pd(res, _mm256_mul_pd(xx, yy));
+        }
+        double *resp = (double*) &res;
+        r += resp[0] + resp[1] + resp[2] + resp[3];
+
+        for(int i = head + 8 * npack; i < len; i++, x++, y++)
+            r += (*x) * (*y);
+
+        return r;
+    }
+#endif
+
     void active_set_update(SparseVector &res)
     {
         const double gamma = sprad;
@@ -80,16 +121,25 @@ protected:
         VectorXd vec = (cache_Ax + adj_z + adj_y / rho) / gamma;
         res = main_x;
 
-        for(SparseVector::InnerIterator iter(res); iter; ++iter)
+        double *val_ptr = res.valuePtr();
+        const int *ind_ptr = res.innerIndexPtr();
+        const int nnz = res.nonZeros();
+
+        #pragma omp parallel for
+        for(int i = 0; i < nnz; i++)
         {
-            const double val = iter.value() - vec.dot(datX.col(iter.index()));
+#ifdef __AVX__
+            const double val = val_ptr[i] - inner_product_avx(vec.data(), datX.data() + ind_ptr[i] * dim_dual, dim_dual);
+#else
+            const double val = val_ptr[i] - vec.dot(datX.col(ind_ptr[i]));
+#endif
 
             if(val > penalty)
-                iter.valueRef() = val - penalty;
+                val_ptr[i] = val - penalty;
             else if(val < -penalty)
-                iter.valueRef() = val + penalty;
+                val_ptr[i] = val + penalty;
             else
-                iter.valueRef() = 0.0;
+                val_ptr[i] = 0.0;
         }
 
         res.prune(0.0);
@@ -111,12 +161,61 @@ protected:
     }
     virtual void next_z(VectorXd &res)
     {
+#ifdef __AVX__
+
+       double *Ax = cache_Ax.data();
+       std::fill(Ax, Ax + dim_dual, double(0));
+
+       const char rem = (unsigned long)Ax % 32;
+       const char head = rem ? (32 - rem) / sizeof(double) : 0;
+       const int npack = (dim_dual - head) / 8;
+       __m256d mvec;
+       __m256d vvec;
+       __m256d cvec;
+
+       const double *X0 = datX.data();
+       const double *colptr;
+       double *vptr;
+
+       for(SparseVector::InnerIterator iter(main_x); iter; ++iter)
+       {
+           colptr = X0 + dim_dual * iter.index();
+           vptr = Ax;
+
+           const double val = iter.value();
+           cvec = _mm256_set1_pd(val);
+
+           for(int i = 0; i < head; i++, colptr++, vptr++)
+               *vptr += *colptr * val;
+
+           for(int i = 0; i < npack; i++, colptr += 8, vptr += 8)
+           {
+               mvec = _mm256_loadu_pd(colptr);
+               mvec = _mm256_mul_pd(mvec, cvec);
+               vvec = _mm256_load_pd(vptr);
+               vvec = _mm256_add_pd(vvec, mvec);
+               _mm256_store_pd(vptr, vvec);
+
+               mvec = _mm256_loadu_pd(colptr + 4);
+               mvec = _mm256_mul_pd(mvec, cvec);
+               vvec = _mm256_load_pd(vptr + 4);
+               vvec = _mm256_add_pd(vvec, mvec);
+               _mm256_store_pd(vptr + 4, vvec);
+           }
+           for(int i = head + 8 * npack; i < dim_dual; i++, colptr++, vptr++)
+               *vptr += *colptr * val;
+        }
+
+#else
         cache_Ax.noalias() = datX * main_x;
+#endif
+
         res.noalias() = (datY + adj_y + rho * cache_Ax) / (-1 - rho);
     }
     void next_residual(VectorXd &res)
     {
-        res.noalias() = cache_Ax + aux_z;
+        // res.noalias() = cache_Ax + aux_z;
+        std::transform(cache_Ax.data(), cache_Ax.data() + dim_dual, aux_z.data(), res.data(), std::plus<double>());
     }
     void rho_changed_action() {}
 
