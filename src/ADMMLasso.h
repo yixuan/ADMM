@@ -1,7 +1,7 @@
 #ifndef ADMMLASSO_H
 #define ADMMLASSO_H
 
-#include "ADMMBase.h"
+#include "FADMMBase.h"
 #include "Linalg/BlasWrapper.h"
 #include "Eigs/SymEigsSolver.h"
 #include "Eigs/MatOpDense.h"
@@ -18,7 +18,7 @@
 // b => y
 // f(x) => 1/2 * ||Ax - b||^2
 // g(z) => lambda * ||z||_1
-class ADMMLasso: public ADMMBase< Eigen::VectorXd, Eigen::SparseVector<double> >
+class ADMMLasso: public FADMMBase< Eigen::VectorXd, Eigen::SparseVector<double> >
 {
 protected:
     typedef Eigen::MatrixXd MatrixXd;
@@ -70,15 +70,21 @@ protected:
     {
         VectorXd rhs = XY - adj_y;
         // rhs += rho * adj_z;
-        for(SparseVector::InnerIterator iter(adj_z); iter; ++iter)
-            rhs[iter.index()] += rho * iter.value();
 
         if(X_is_thin)
         {
+            for(SparseVector::InnerIterator iter(adj_z); iter; ++iter)
+                rhs[iter.index()] += rho * iter.value();
             res.noalias() = solver.solve(rhs);
         } else {
-            res.noalias() = rhs - datX.transpose() * solver.solve(datX * rhs);
-            res /= rho;
+            //res.noalias() = rhs - datX.transpose() * solver.solve(datX * rhs);
+            //res /= rho;
+            VectorXd Ax = datX * adj_z;
+            res.noalias() = rhs - datX.transpose() * Ax;
+            const double c1 = res.squaredNorm();
+            const double c2 = (datX * res).squaredNorm();
+            res *= (c1 / (c2 + rho * c1));
+            res += adj_z;
         }
     }
     virtual void next_z(SparseVector &res)
@@ -165,8 +171,8 @@ public:
     ADMMLasso(const MatrixXd &datX_, const VectorXd &datY_,
               double eps_abs_ = 1e-6,
               double eps_rel_ = 1e-6) :
-        ADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
-                 eps_abs_, eps_rel_),
+        FADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
+                  eps_abs_, eps_rel_),
         datX(datX_.data(), datX_.rows(), datX_.cols()),
         datY(datY_.data(), datY_.size()),
         XY(datX.transpose() * datY),
@@ -178,7 +184,7 @@ public:
               int n_, int p_,
               double eps_abs_ = 1e-6,
               double eps_rel_ = 1e-6) :
-        ADMMBase(p_, p_, p_, eps_abs_, eps_rel_),
+        FADMMBase(p_, p_, p_, eps_abs_, eps_rel_),
         datX(datX_, n_, p_),
         datY(datY_, n_),
         XY(datX.transpose() * datY),
