@@ -5,7 +5,7 @@
 
 namespace Linalg {
 
-
+typedef const Eigen::Ref<const Eigen::MatrixXd> ConstGenericMatrix;
 
 extern "C"
 {
@@ -13,12 +13,21 @@ extern "C"
                 const double* alpha, const double* A, const int* ldA,
                 const double* x, const int* incx,
                 const double* beta, double* y, const int* incy);
+    void dsymv_(const char *uplo, const int *n, const double *alpha,
+            	const double *a, const int *lda,
+            	const double *x, const int *incx,
+            	const double *beta, double *y, const int *incy);
     void dgemm_(const char* transA, const char* transB, const int* m, const int* n, const int* k,
                 const double* alpha, const double* A, const int* ldA, const double* B, const int* ldB,
                 const double* beta, double* C, const int* ldC);
     void dsyrk_(const char* uplo, const char* transA, const int* n, const int* k,
                 const double* alpha, const double* A, const int* ldA,
                 const double* beta, double* C, const int* ldC);
+    void dtrsm_(const char *side, const char *uplo,
+            	const char *transa, const char *diag,
+            	const int *m, const int *n, const double *alpha,
+            	const double *a, const int *lda,
+            	double *b, const int *ldb);
 }
 
 inline void mat_vec_prod(Eigen::VectorXd &res, const Eigen::MatrixXd &X, const Eigen::VectorXd &v)
@@ -64,7 +73,7 @@ inline void mat_vec_tprod(double *res, const double *X, const double *v, int n, 
 }
 
 // Calculating X'X
-inline void cross_prod(Eigen::MatrixXd &res, const Eigen::Map<const Eigen::MatrixXd> &X)
+inline void cross_prod(Eigen::MatrixXd &res, ConstGenericMatrix &X)
 {
     const double one = 1.0;
     const double zero = 0.0;
@@ -83,7 +92,7 @@ inline void cross_prod(Eigen::MatrixXd &res, const Eigen::Map<const Eigen::Matri
            &zero, res_ptr, &p);
 }
 
-inline void cross_prod_lower(Eigen::MatrixXd &res, const Eigen::Map<const Eigen::MatrixXd> &X)
+inline void cross_prod_lower(Eigen::MatrixXd &res, ConstGenericMatrix &X)
 {
     const double one = 1.0;
     const double zero = 0.0;
@@ -100,7 +109,7 @@ inline void cross_prod_lower(Eigen::MatrixXd &res, const Eigen::Map<const Eigen:
            &zero, res_ptr, &p);
 }
 
-inline void tcross_prod_lower(Eigen::MatrixXd &res, const Eigen::Map<const Eigen::MatrixXd> &X)
+inline void tcross_prod_lower(Eigen::MatrixXd &res, ConstGenericMatrix &X)
 {
     const double one = 1.0;
     const double zero = 0.0;
