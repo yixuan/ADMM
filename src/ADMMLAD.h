@@ -1,7 +1,7 @@
 #ifndef ADMMLAD_H
 #define ADMMLAD_H
 
-#include "ADMMBase.h"
+#include "FADMMBase.h"
 #include "Linalg/BlasWrapper.h"
 
 // minimize  ||y - X * beta||_1
@@ -27,7 +27,7 @@
 // c  => y
 // f(x) => 0
 // g(z) => ||z||_1
-class ADMMLAD: public ADMMBase< Eigen::VectorXd, Eigen::SparseVector<double> >
+class ADMMLAD: public FADMMBase< Eigen::VectorXd, Eigen::SparseVector<double> >
 {
 private:
     typedef Eigen::MatrixXd MatrixXd;
@@ -40,7 +40,8 @@ private:
 
     const MatrixXd *datX;         // pointer to data matrix
     const VectorXd *datY;         // pointer response vector
-    double ynorm;                 // L2 norm of datY
+    MatrixXd H;                   // hat matrix X * inv(X'X) * X'
+    const double ynorm;           // L2 norm of datY
 
     LLT solver;                   // Cholesky factorization of A'A
 
@@ -62,16 +63,23 @@ private:
         VectorXd vec = (*datY) - adj_y / rho;
         vec += adj_z;
 
-        VectorXd tmp = (*datX).transpose() * vec;
-        res.noalias() = (*datX) * solver.solve(tmp);
+        // VectorXd tmp = (*datX).transpose() * vec;
+        // res.noalias() = (*datX) * solver.solve(tmp);
+
+        const double alpha = 1.0;
+        const double beta = 0.0;
+        const int one = 1;
+        Linalg::dsymv_("L", &dim_dual, &alpha, H.data(), &dim_dual,
+                       vec.data(), &one, &beta, res.data(), &one);
     }
     static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
     {
+        int v_size = vec.size();
         res.setZero();
-        res.reserve(vec.size() / 2);
+        res.reserve(v_size);
 
-        double *ptr = vec.data();
-        for(int i = 0; i < vec.size(); i++)
+        const double *ptr = vec.data();
+        for(int i = 0; i < v_size; i++)
         {
             if(ptr[i] > penalty)
                 res.insertBack(i) = ptr[i] - penalty;
@@ -93,6 +101,45 @@ private:
 
 
 
+    // Calculate ||v1 - v2||^2 when v1 and v2 are sparse
+    static double diff_squared_norm(const SparseVector &v1, const SparseVector &v2)
+    {
+        const int n1 = v1.nonZeros(), n2 = v2.nonZeros();
+        const double *v1_val = v1.valuePtr(), *v2_val = v2.valuePtr();
+        const int *v1_ind = v1.innerIndexPtr(), *v2_ind = v2.innerIndexPtr();
+
+        double r = 0.0;
+        int i1 = 0, i2 = 0;
+        while(i1 < n1 && i2 < n2)
+        {
+            if(v1_ind[i1] == v2_ind[i2])
+            {
+                double val = v1_val[i1] - v2_val[i2];
+                r += val * val;
+                i1++;
+                i2++;
+            } else if(v1_ind[i1] < v2_ind[i2]) {
+                r += v1_val[i1] * v1_val[i1];
+                i1++;
+            } else {
+                r += v2_val[i2] * v2_val[i2];
+                i2++;
+            }
+        }
+        while(i1 < n1)
+        {
+            r += v1_val[i1] * v1_val[i1];
+            i1++;
+        }
+        while(i2 < n2)
+        {
+            r += v2_val[i2] * v2_val[i2];
+            i2++;
+        }
+
+        return r;
+    }
+
     // Faster computation of epsilons and residuals
     double compute_eps_primal()
     {
@@ -104,14 +151,13 @@ private:
     {
         return dual_y.norm() * eps_rel + std::sqrt(double(dim_main)) * eps_abs;
     }
-    double compute_resid_dual(SparseVector &zdiff)
+    double compute_resid_dual()
     {
-        return rho * zdiff.norm();
+        return rho * std::sqrt(diff_squared_norm(aux_z, old_z));
     }
     double compute_resid_combined()
     {
-        SparseVector tmp = aux_z - adj_z;
-        return rho * resid_primal * resid_primal + rho * tmp.squaredNorm();
+        return rho * resid_primal * resid_primal + rho * diff_squared_norm(aux_z, adj_z);
     }
 
 public:
@@ -119,15 +165,30 @@ public:
             double rho_ = 1.0,
             double eps_abs_ = 1e-6,
             double eps_rel_ = 1e-6) :
-        ADMMBase(datX_.cols(), datX_.rows(), datX_.rows(),
-                 eps_abs_, eps_rel_),
+        FADMMBase(datX_.rows(), datX_.rows(), datX_.rows(),
+                  eps_abs_, eps_rel_),
         datX(&datX_), datY(&datY_),
         ynorm(datY_.norm())
     {
-        const MapMat mapX(datX_.data(), datX_.rows(), datX_.cols());
-        MatrixXd AA;
-        Linalg::cross_prod_lower(AA, mapX);
-        solver.compute(AA.selfadjointView<Eigen::Lower>());
+        const int nrow = datX_.rows();
+        const int ncol = datX_.cols();
+        const int nelem = nrow * ncol;
+        // Calculating X'X
+        MatrixXd XX;
+        Linalg::cross_prod_lower(XX, datX_);
+        // Cholesky decomposition X'X = LL'
+        solver.compute(XX.selfadjointView<Eigen::Lower>());
+
+        const MatrixXd &L = solver.matrixLLT();
+        // Calculating T = X * inv(L'), solving TL'=X
+        double *T = new double[nelem];
+        std::copy(datX_.data(), datX_.data() + nelem, T);
+        const double alpha = 1.0;
+        Linalg::dtrsm_("R", "L", "T", "N", &nrow, &ncol,
+                       &alpha, L.data(), &ncol, T, &nrow);
+        // H = X * inv(X'X) * X' = TT'
+        Linalg::tcross_prod_lower(H, MapMat(T, nrow, ncol));
+        delete [] T;
 
         main_x.setZero();
         aux_z.setZero();
