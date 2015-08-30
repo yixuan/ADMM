@@ -7,7 +7,7 @@
 #include "Eigs/MatOpDense.h"
 
 #ifdef __AVX__
-#include <immintrin.h>
+#include "AVX.h"
 #endif
 
 // minimize  1/2 * ||y - X * beta||^2 + lambda * ||beta||_1
@@ -77,43 +77,6 @@ protected:
         }
     }
 
-#ifdef __AVX__
-    static double inner_product_avx(const double *x, const double *y, int len)
-    {
-        __m256d xx;
-        __m256d yy;
-        __m256d res = _mm256_setzero_pd();
-
-        double r = 0.0;
-
-        const char rem = (unsigned long)x % 32;
-        const char head = rem ? (32 - rem) / sizeof(double) : 0;
-
-        for(int i = 0; i < head; i++, x++, y++)
-            r += (*x) * (*y);
-
-        const int npack = (len - head) / 8;
-
-        for(int i = 0; i < npack; i++, x += 8, y += 8)
-        {
-            xx = _mm256_load_pd(x);
-            yy = _mm256_loadu_pd(y);
-            res = _mm256_add_pd(res, _mm256_mul_pd(xx, yy));
-
-            xx = _mm256_load_pd(x + 4);
-            yy = _mm256_loadu_pd(y + 4);
-            res = _mm256_add_pd(res, _mm256_mul_pd(xx, yy));
-        }
-        double *resp = (double*) &res;
-        r += resp[0] + resp[1] + resp[2] + resp[3];
-
-        for(int i = head + 8 * npack; i < len; i++, x++, y++)
-            r += (*x) * (*y);
-
-        return r;
-    }
-#endif
-
     void active_set_update(SparseVector &res)
     {
         const double gamma = sprad;
@@ -163,50 +126,7 @@ protected:
     virtual void next_z(VectorXd &res)
     {
 #ifdef __AVX__
-
-       double *Ax = cache_Ax.data();
-       std::fill(Ax, Ax + dim_dual, double(0));
-
-       const char rem = (unsigned long)Ax % 32;
-       const char head = rem ? (32 - rem) / sizeof(double) : 0;
-       const int npack = (dim_dual - head) / 8;
-       __m256d mvec;
-       __m256d vvec;
-       __m256d cvec;
-
-       const double *X0 = datX.data();
-       const double *colptr;
-       double *vptr;
-
-       for(SparseVector::InnerIterator iter(main_x); iter; ++iter)
-       {
-           colptr = X0 + dim_dual * iter.index();
-           vptr = Ax;
-
-           const double val = iter.value();
-           cvec = _mm256_set1_pd(val);
-
-           for(int i = 0; i < head; i++, colptr++, vptr++)
-               *vptr += *colptr * val;
-
-           for(int i = 0; i < npack; i++, colptr += 8, vptr += 8)
-           {
-               mvec = _mm256_loadu_pd(colptr);
-               mvec = _mm256_mul_pd(mvec, cvec);
-               vvec = _mm256_load_pd(vptr);
-               vvec = _mm256_add_pd(vvec, mvec);
-               _mm256_store_pd(vptr, vvec);
-
-               mvec = _mm256_loadu_pd(colptr + 4);
-               mvec = _mm256_mul_pd(mvec, cvec);
-               vvec = _mm256_load_pd(vptr + 4);
-               vvec = _mm256_add_pd(vvec, mvec);
-               _mm256_store_pd(vptr + 4, vvec);
-           }
-           for(int i = head + 8 * npack; i < dim_dual; i++, colptr++, vptr++)
-               *vptr += *colptr * val;
-        }
-
+        mat_spvec_product_avx(cache_Ax, datX, main_x);
 #else
         cache_Ax.noalias() = datX * main_x;
 #endif
