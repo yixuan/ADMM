@@ -42,6 +42,7 @@ protected:
     int iter_counter;             // which iteration are we in?
 
     VectorXd cache_Ax;            // cache Ax
+    VectorXd tmp;
 
     // x -> Ax
     void A_mult(VectorXd &res, SparseVector &x)
@@ -81,7 +82,7 @@ protected:
     {
         const double gamma = sprad;
         double penalty = lambda / (rho * gamma);
-        VectorXd vec = (cache_Ax + aux_z + dual_y / rho) / gamma;
+        tmp.noalias() = (cache_Ax + aux_z + dual_y / rho) / gamma;
         res = main_x;
 
         double *val_ptr = res.valuePtr();
@@ -92,9 +93,9 @@ protected:
         for(int i = 0; i < nnz; i++)
         {
 #ifdef __AVX__
-            const double val = val_ptr[i] - inner_product_avx(vec.data(), datX.data() + ind_ptr[i] * dim_dual, dim_dual);
+            const double val = val_ptr[i] - inner_product_avx(tmp.data(), datX.data() + ind_ptr[i] * dim_dual, dim_dual);
 #else
-            const double val = val_ptr[i] - vec.dot(datX.col(ind_ptr[i]));
+            const double val = val_ptr[i] - tmp.dot(datX.col(ind_ptr[i]));
 #endif
 
             if(val > penalty)
@@ -113,7 +114,7 @@ protected:
         if(iter_counter % 10 == 0 && lambda < lambda0)
         {
             const double gamma = sprad;
-            VectorXd tmp = cache_Ax + aux_z + dual_y / rho;
+            tmp.noalias() = cache_Ax + aux_z + dual_y / rho;
             VectorXd vec(dim_main);
             vec.noalias() = -datX.transpose() * tmp / gamma;
             vec += main_x;
@@ -163,7 +164,7 @@ public:
                  eps_abs_, eps_rel_),
         datX(datX_.data(), datX_.rows(), datX_.cols()),
         datY(datY_.data(), datY_.size()),
-        cache_Ax(dim_dual)
+        cache_Ax(dim_dual), tmp(dim_dual)
     {
         lambda0 = (datX.transpose() * datY).array().abs().maxCoeff();
 
@@ -185,7 +186,7 @@ public:
         ADMMBase(p_, n_, n_, eps_abs_, eps_rel_),
         datX(datX_, n_, p_),
         datY(datY_, n_),
-        cache_Ax(dim_dual)
+        cache_Ax(dim_dual), tmp(dim_dual)
     {
         lambda0 = (datX.transpose() * datY).array().abs().maxCoeff();
 
