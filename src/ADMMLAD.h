@@ -40,7 +40,8 @@ private:
 
     const MatrixXd *datX;         // pointer to data matrix
     const VectorXd *datY;         // pointer response vector
-    MatrixXd H;                   // hat matrix X * inv(X'X) * X'
+    MatrixXd H;                   // cache hat matrix X * inv(X'X) * X'
+                                  // if nrow(X) <= 2000
     const double ynorm;           // L2 norm of datY
 
     LLT solver;                   // Cholesky factorization of A'A
@@ -63,14 +64,17 @@ private:
         VectorXd vec = (*datY) - adj_y / rho;
         vec += adj_z;
 
-        // VectorXd tmp = (*datX).transpose() * vec;
-        // res.noalias() = (*datX) * solver.solve(tmp);
-
-        const double alpha = 1.0;
-        const double beta = 0.0;
-        const int one = 1;
-        Linalg::dsymv_("L", &dim_dual, &alpha, H.data(), &dim_dual,
-                       vec.data(), &one, &beta, res.data(), &one);
+        if(dim_dual <= 2000)
+        {
+            const double alpha = 1.0;
+            const double beta = 0.0;
+            const int one = 1;
+            Linalg::dsymv_("L", &dim_dual, &alpha, H.data(), &dim_dual,
+                           vec.data(), &one, &beta, res.data(), &one);
+        } else {
+            VectorXd tmp = (*datX).transpose() * vec;
+            res.noalias() = (*datX) * solver.solve(tmp);
+        }
     }
     static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
     {
@@ -179,16 +183,19 @@ public:
         // Cholesky decomposition X'X = LL'
         solver.compute(XX.selfadjointView<Eigen::Lower>());
 
-        const MatrixXd &L = solver.matrixLLT();
-        // Calculating T = X * inv(L'), solving TL'=X
-        double *T = new double[nelem];
-        std::copy(datX_.data(), datX_.data() + nelem, T);
-        const double alpha = 1.0;
-        Linalg::dtrsm_("R", "L", "T", "N", &nrow, &ncol,
-                       &alpha, L.data(), &ncol, T, &nrow);
-        // H = X * inv(X'X) * X' = TT'
-        Linalg::tcross_prod_lower(H, MapMat(T, nrow, ncol));
-        delete [] T;
+        if(nrow <= 2000)
+        {
+            const MatrixXd &L = solver.matrixLLT();
+            // Calculating T = X * inv(L'), solving TL'=X
+            double *T = new double[nelem];
+            std::copy(datX_.data(), datX_.data() + nelem, T);
+            const double alpha = 1.0;
+            Linalg::dtrsm_("R", "L", "T", "N", &nrow, &ncol,
+                           &alpha, L.data(), &ncol, T, &nrow);
+            // H = X * inv(X'X) * X' = TT'
+            Linalg::tcross_prod_lower(H, MapMat(T, nrow, ncol));
+            delete [] T;
+        }
 
         main_x.setZero();
         aux_z.setZero();
