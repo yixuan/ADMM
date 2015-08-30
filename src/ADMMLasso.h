@@ -26,6 +26,8 @@ protected:
     typedef Eigen::ArrayXd ArrayXd;
     typedef Eigen::Map<const MatrixXd> MapMat;
     typedef Eigen::Map<const VectorXd> MapVec;
+    typedef const Eigen::Ref<const MatrixXd> ConstGenericMatrix;
+    typedef const Eigen::Ref<const VectorXd> ConstGenericVector;
     typedef Eigen::SparseVector<double> SparseVector;
     typedef Eigen::LLT<MatrixXd> LLT;
 
@@ -168,25 +170,13 @@ protected:
     }
 
 public:
-    ADMMLasso(const MatrixXd &datX_, const VectorXd &datY_,
+    ADMMLasso(ConstGenericMatrix &datX_, ConstGenericVector &datY_,
               double eps_abs_ = 1e-6,
               double eps_rel_ = 1e-6) :
         FADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
                   eps_abs_, eps_rel_),
         datX(datX_.data(), datX_.rows(), datX_.cols()),
         datY(datY_.data(), datY_.size()),
-        XY(datX.transpose() * datY),
-        X_is_thin(datX.rows() > datX.cols()),
-        lambda0(XY.array().abs().maxCoeff())
-    {}
-
-    ADMMLasso(const double *datX_, const double *datY_,
-              int n_, int p_,
-              double eps_abs_ = 1e-6,
-              double eps_rel_ = 1e-6) :
-        FADMMBase(p_, p_, p_, eps_abs_, eps_rel_),
-        datX(datX_, n_, p_),
-        datY(datY_, n_),
         XY(datX.transpose() * datY),
         X_is_thin(datX.rows() > datX.cols()),
         lambda0(XY.array().abs().maxCoeff())
