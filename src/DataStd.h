@@ -3,6 +3,10 @@
 
 #include <Eigen/Core>
 
+#ifdef __AVX__
+#include "AVX.h"
+#endif
+
 class DataStd
 {
 private:
@@ -98,12 +102,21 @@ public:
                     X.col(i).array() -= meanX[i];
                     scaleX[i] = X.col(i).norm() * n_invsqrt;
                     X.col(i).array() /= scaleX[i];*/
+    #ifdef __AVX__
+                    double *begin = &X(0, i);
+                    double s, ss;
+                    get_ss_avx(begin, n, s, ss);
+                    meanX[i] = s / n;
+                    scaleX[i] = std::sqrt(ss - s * s / n) * n_invsqrt;
+                    standardize_vec_avx(begin, n, meanX[i], 1.0 / scaleX[i]);
+    #else
                     double *begin = &X(0, i);
                     double *end = begin + n;
                     meanX[i] = X.col(i).mean();
                     std::transform(begin, end, begin, std::bind2nd(std::minus<double>(), meanX[i]));
                     scaleX[i] = X.col(i).norm() * n_invsqrt;
                     std::transform(begin, end, begin, std::bind2nd(std::multiplies<double>(), 1.0 / scaleX[i]));
+    #endif
                 }
                 break;
             default:

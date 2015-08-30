@@ -7,7 +7,75 @@
 #ifdef __AVX__
 #include <immintrin.h>
 
-inline double inner_product_avx(const double *x, const double *y, int len)
+inline void get_ss_avx(const double *x, const int len, double &sum, double &sum_of_square)
+{
+    __m256d xx;
+    __m256d s = _mm256_setzero_pd();
+    __m256d ss = _mm256_setzero_pd();
+
+    sum = 0.0;
+    sum_of_square = 0.0;
+
+    const char rem = (unsigned long)x % 32;
+    const char head = rem ? (32 - rem) / sizeof(double) : 0;
+    for(int i = 0; i < head; i++, x++)
+    {
+        sum += *x;
+        sum_of_square += (*x) * (*x);
+    }
+
+    const int npack = (len - head) / 8;
+    for(int i = 0; i < npack; i++, x += 8)
+    {
+        xx = _mm256_load_pd(x);
+        s = _mm256_add_pd(s, xx);
+        ss = _mm256_add_pd(ss, _mm256_mul_pd(xx, xx));
+
+        xx = _mm256_load_pd(x + 4);
+        s = _mm256_add_pd(s, xx);
+        ss = _mm256_add_pd(ss, _mm256_mul_pd(xx, xx));
+    }
+    double *resp = (double *) &s;
+    sum += resp[0] + resp[1] + resp[2] + resp[3];
+    resp = (double *) &ss;
+    sum_of_square += resp[0] + resp[1] + resp[2] + resp[3];
+
+    for(int i = head + 8 * npack; i < len; i++, x++)
+    {
+        sum += *x;
+        sum_of_square += (*x) * (*x);
+    }
+}
+
+// (x - center) * scale
+inline void standardize_vec_avx(double *x, const int len, const double center, const double scale)
+{
+    __m256d xx;
+    __m256d cc = _mm256_set1_pd(center);
+    __m256d ss = _mm256_set1_pd(scale);
+
+    const char rem = (unsigned long)x % 32;
+    const char head = rem ? (32 - rem) / sizeof(double) : 0;
+    for(int i = 0; i < head; i++, x++)
+        *x = (*x - center) * scale;
+
+    const int npack = (len - head) / 8;
+    for(int i = 0; i < npack; i++, x += 8)
+    {
+        xx = _mm256_load_pd(x);
+        xx = _mm256_mul_pd(_mm256_sub_pd(xx, cc), ss);
+        _mm256_store_pd(x, xx);
+
+        xx = _mm256_load_pd(x + 4);
+        xx = _mm256_mul_pd(_mm256_sub_pd(xx, cc), ss);
+        _mm256_store_pd(x + 4, xx);
+    }
+
+    for(int i = head + 8 * npack; i < len; i++, x++)
+        *x = (*x - center) * scale;
+}
+
+inline double inner_product_avx(const double *x, const double *y, const int len)
 {
     __m256d xx;
     __m256d yy;
