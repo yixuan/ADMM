@@ -31,6 +31,8 @@ protected:
     typedef Eigen::ArrayXd ArrayXd;
     typedef Eigen::Map<const MatrixXd> MapMat;
     typedef Eigen::Map<const VectorXd> MapVec;
+    typedef const Eigen::Ref<const MatrixXd> ConstGenericMatrix;
+    typedef const Eigen::Ref<const VectorXd> ConstGenericVector;
     typedef Eigen::SparseVector<double> SparseVector;
 
     const MapMat datX;            // pointer to data matrix
@@ -157,35 +159,13 @@ protected:
     }
 
 public:
-    ADMMLasso(const MatrixXd &datX_, const VectorXd &datY_,
+    ADMMLasso(ConstGenericMatrix &datX_, ConstGenericVector &datY_,
               double eps_abs_ = 1e-6,
               double eps_rel_ = 1e-6) :
         ADMMBase(datX_.cols(), datX_.rows(), datX_.rows(),
                  eps_abs_, eps_rel_),
         datX(datX_.data(), datX_.rows(), datX_.cols()),
         datY(datY_.data(), datY_.size()),
-        cache_Ax(dim_dual), tmp(dim_dual)
-    {
-        lambda0 = (datX.transpose() * datY).array().abs().maxCoeff();
-
-        MatrixXd XX;
-        Linalg::tcross_prod_lower(XX, datX);
-        MatOpSymLower<double> op(XX);
-        SymEigsSolver<double, LARGEST_ALGE> eigs(&op, 1, 3);
-        srand(0);
-        eigs.init();
-        eigs.compute(10, 0.1);
-        VectorXd evals = eigs.ritzvalues();
-        sprad = evals[0];
-    }
-
-    ADMMLasso(const double *datX_, const double *datY_,
-              int n_, int p_,
-              double eps_abs_ = 1e-6,
-              double eps_rel_ = 1e-6) :
-        ADMMBase(p_, n_, n_, eps_abs_, eps_rel_),
-        datX(datX_, n_, p_),
-        datY(datY_, n_),
         cache_Ax(dim_dual), tmp(dim_dual)
     {
         lambda0 = (datX.transpose() * datY).array().abs().maxCoeff();
