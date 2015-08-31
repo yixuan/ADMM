@@ -29,6 +29,7 @@ private:
     const MapMat datX;            // pointer to A
     LLT solver;                   // Cholesky factorization of AA'
     VectorXd cache_AAAb;          // cache A'(AA')^(-1)b
+    MatrixXd cache_LinvA;         // cache L^(-1)A, AA'=LL'
 
 
 
@@ -46,13 +47,18 @@ private:
     void next_x(VectorXd &res)
     {
         VectorXd vec = -adj_y / rho;
-        vec += adj_z;
-        res.noalias() = vec + cache_AAAb;
+        // vec += adj_z;
+        // res.noalias() = vec + cache_AAAb;
 
-        VectorXd tmp = datX * vec;
-        vec.noalias() = datX.transpose() * solver.solve(tmp);
+        for(SparseVector::InnerIterator iter(adj_z); iter; ++iter)
+            vec[iter.index()] += iter.value();
+        std::transform(vec.data(), vec.data() + dim_dual, cache_AAAb.data(), res.data(), std::plus<double>());
 
-        res -= vec;
+        // VectorXd tmp = datX * vec;
+        // vec.noalias() = datX.transpose() * solver.solve(tmp);
+        // res -= vec;
+
+        res.noalias() -= cache_LinvA.transpose() * (cache_LinvA * vec);
     }
 
     static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
@@ -155,6 +161,18 @@ public:
         Linalg::tcross_prod_lower(XX, datX_);
         solver.compute(XX.selfadjointView<Eigen::Lower>());
         cache_AAAb = datX_.transpose() * solver.solve(datY_);
+
+        // Calculating T = inv(L) * X, solving LT=X
+        const MatrixXd &L = solver.matrixL();
+        const int nrow = datX_.rows();
+        const int ncol = datX_.cols();
+        const int nelem = nrow * ncol;
+        cache_LinvA.resize(nrow, ncol);
+        std::copy(datX_.data(), datX_.data() + nelem, cache_LinvA.data());
+
+        const double alpha = 1.0;
+        Linalg::dtrsm_("L", "L", "N", "N", &nrow, &ncol,
+                       &alpha, L.data(), &nrow, cache_LinvA.data(), &nrow);
 
         main_x.setZero();
         aux_z.setZero();
