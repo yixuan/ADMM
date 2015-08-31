@@ -98,8 +98,12 @@ private:
     }
     void next_residual(VectorXd &res)
     {
-        res.noalias() = main_x - (*datY);
-        res -= aux_z;
+        // res.noalias() = main_x - (*datY);
+        // res -= aux_z;
+
+        std::transform(main_x.data(), main_x.data() + dim_dual, datY->data(), res.data(), std::minus<double>());
+        for(SparseVector::InnerIterator iter(aux_z); iter; ++iter)
+            res[iter.index()] -= iter.value();
     }
     void rho_changed_action() {}
 
