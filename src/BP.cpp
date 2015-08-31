@@ -21,11 +21,6 @@ RcppExport SEXP admm_bp(SEXP x_, SEXP y_, SEXP opts_)
 {
 BEGIN_RCPP
 
-#if ADMM_PROFILE > 0
-    double t1, t2;
-    t1 = omp_get_wtime();
-#endif
-
     NumericMatrix x(x_);
     NumericVector y(y_);
     const MapMat datX(x.begin(), x.nrow(), x.ncol());
@@ -37,27 +32,12 @@ BEGIN_RCPP
     double eps_rel = as<double>(opts["eps_rel"]);
     double rho = as<double>(opts["rho"]);
 
-#if ADMM_PROFILE > 0
-    t2 = omp_get_wtime();
-    Rcpp::Rcout << "part1: " << t2 - t1 << " secs.\n";
-#endif
-
     ADMMBP solver(datX, datY, rho, eps_abs, eps_rel);
-
-#if ADMM_PROFILE > 0
-    t1 = omp_get_wtime();
-    Rcpp::Rcout << "part2: " << t1 - t2 << " secs.\n";
-#endif
 
     int niter = solver.solve(maxit);
     SpMat beta(datX.cols(), 1);
     beta.col(0) = solver.get_z();
     beta.makeCompressed();
-
-#if ADMM_PROFILE > 0
-    t2 = omp_get_wtime();
-    Rcpp::Rcout << "part3: " << t2 - t1 << " secs.\n";
-#endif
 
     return List::create(Named("beta") = beta,
                         Named("niter") = niter);

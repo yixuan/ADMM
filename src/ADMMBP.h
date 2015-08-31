@@ -1,9 +1,7 @@
-#define EIGEN_DONT_PARALLELIZE
-
 #ifndef ADMMBP_H
 #define ADMMBP_H
 
-#include "ADMMBase.h"
+#include "FADMMBase.h"
 #include "Linalg/BlasWrapper.h"
 
 // Basis Pursuit
@@ -17,7 +15,7 @@
 //
 // f(x) => indicator function of Ax = b
 // g(z) => ||z||_1
-class ADMMBP: public ADMMBase< Eigen::VectorXd, Eigen::SparseVector<double> >
+class ADMMBP: public FADMMBase< Eigen::VectorXd, Eigen::SparseVector<double> >
 {
 private:
     typedef Eigen::MatrixXd MatrixXd;
@@ -28,7 +26,7 @@ private:
     typedef Eigen::SparseVector<double> SparseVector;
     typedef Eigen::LLT<MatrixXd> LLT;
 
-    const MapMat *datX;           // pointer to A
+    const MapMat datX;            // pointer to A
     LLT solver;                   // Cholesky factorization of AA'
     VectorXd cache_AAAb;          // cache A'(AA')^(-1)b
 
@@ -51,19 +49,20 @@ private:
         vec += adj_z;
         res.noalias() = vec + cache_AAAb;
 
-        VectorXd tmp = (*datX) * vec;
-        vec.noalias() = (*datX).transpose() * solver.solve(tmp);
+        VectorXd tmp = datX * vec;
+        vec.noalias() = datX.transpose() * solver.solve(tmp);
 
         res -= vec;
     }
 
     static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
     {
+        int v_size = vec.size();
         res.setZero();
-        res.reserve(vec.size() / 2);
+        res.reserve(v_size);
 
-        double *ptr = vec.data();
-        for(int i = 0; i < vec.size(); i++)
+        const double *ptr = vec.data();
+        for(int i = 0; i < v_size; i++)
         {
             if(ptr[i] > penalty)
                 res.insertBack(i) = ptr[i] - penalty;
@@ -85,6 +84,45 @@ private:
 
 
 
+    // Calculate ||v1 - v2||^2 when v1 and v2 are sparse
+    static double diff_squared_norm(const SparseVector &v1, const SparseVector &v2)
+    {
+        const int n1 = v1.nonZeros(), n2 = v2.nonZeros();
+        const double *v1_val = v1.valuePtr(), *v2_val = v2.valuePtr();
+        const int *v1_ind = v1.innerIndexPtr(), *v2_ind = v2.innerIndexPtr();
+
+        double r = 0.0;
+        int i1 = 0, i2 = 0;
+        while(i1 < n1 && i2 < n2)
+        {
+            if(v1_ind[i1] == v2_ind[i2])
+            {
+                double val = v1_val[i1] - v2_val[i2];
+                r += val * val;
+                i1++;
+                i2++;
+            } else if(v1_ind[i1] < v2_ind[i2]) {
+                r += v1_val[i1] * v1_val[i1];
+                i1++;
+            } else {
+                r += v2_val[i2] * v2_val[i2];
+                i2++;
+            }
+        }
+        while(i1 < n1)
+        {
+            r += v1_val[i1] * v1_val[i1];
+            i1++;
+        }
+        while(i2 < n2)
+        {
+            r += v2_val[i2] * v2_val[i2];
+            i2++;
+        }
+
+        return r;
+    }
+
     // Faster computation of epsilons and residuals
     double compute_eps_primal()
     {
@@ -95,14 +133,13 @@ private:
     {
         return dual_y.norm() * eps_rel + std::sqrt(double(dim_main)) * eps_abs;
     }
-    double compute_resid_dual(SparseVector &zdiff)
+    double compute_resid_dual()
     {
-        return rho * zdiff.norm();
+        return rho * std::sqrt(diff_squared_norm(aux_z, old_z));
     }
     double compute_resid_combined()
     {
-        SparseVector tmp = aux_z - adj_z;
-        return rho * resid_primal * resid_primal + rho * tmp.squaredNorm();
+        return rho * resid_primal * resid_primal + rho * diff_squared_norm(aux_z, adj_z);
     }
 
 public:
@@ -110,13 +147,13 @@ public:
            double rho_ = 1.0,
            double eps_abs_ = 1e-6,
            double eps_rel_ = 1e-6) :
-        ADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
-                 eps_abs_, eps_rel_),
-        datX(&datX_)
+        FADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
+                  eps_abs_, eps_rel_),
+        datX(datX_.data(), datX_.rows(), datX_.cols())
     {
-        MatrixXd AA;
-        Linalg::tcross_prod_lower(AA, datX_);
-        solver.compute(AA.selfadjointView<Eigen::Lower>());
+        MatrixXd XX;
+        Linalg::tcross_prod_lower(XX, datX_);
+        solver.compute(XX.selfadjointView<Eigen::Lower>());
         cache_AAAb = datX_.transpose() * solver.solve(datY_);
 
         main_x.setZero();
