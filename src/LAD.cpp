@@ -17,11 +17,6 @@ RcppExport SEXP admm_lad(SEXP x_, SEXP y_, SEXP intercept_, SEXP opts_)
 {
 BEGIN_RCPP
 
-#if ADMM_PROFILE > 0
-    double t1, t2;
-    t1 = omp_get_wtime();
-#endif
-
     MatrixXd datX(as<MatrixXd>(x_));
     VectorXd datY(as<VectorXd>(y_));
 
@@ -36,35 +31,15 @@ BEGIN_RCPP
 
     bool intercept = as<bool>(intercept_);
 
-#if ADMM_PROFILE > 0
-    t2 = omp_get_wtime();
-    Rcpp::Rcout << "part1: " << t2 - t1 << " secs.\n";
-#endif
-
     DataStd datstd(n, p, true, intercept);
     datstd.standardize(datX, datY);
 
-#if ADMM_PROFILE > 0
-    t1 = omp_get_wtime();
-    Rcpp::Rcout << "part2: " << t1 - t2 << " secs.\n";
-#endif
-
     ADMMLAD solver(datX, datY, rho, eps_abs, eps_rel);
-
-#if ADMM_PROFILE > 0
-    t2 = omp_get_wtime();
-    Rcpp::Rcout << "part3: " << t2 - t1 << " secs.\n";
-#endif
 
     int niter = solver.solve(maxit);
     ArrayXd beta(p + 1);
     beta.tail(p) = solver.get_x();
     datstd.recover(beta[0], beta.tail(p));
-
-#if ADMM_PROFILE > 0
-    t1 = omp_get_wtime();
-    Rcpp::Rcout << "part4: " << t1 - t2 << " secs.\n";
-#endif
 
     return List::create(Named("beta") = beta,
                         Named("niter") = niter);
