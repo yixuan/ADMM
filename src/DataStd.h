@@ -50,10 +50,18 @@ public:
 
     static double sd_n(ConstGenericVector &v)
     {
+#ifdef __AVX__
+        double s, ss;
+        const int vsize = v.size();
+        get_ss_avx(v.data(), v.size(), s, ss);
+        s /= vsize;
+        return std::sqrt(ss / vsize - s * s);
+#else
         double mean = v.mean();
         VectorXd v_centered = v.array() - mean;
 
         return v_centered.norm() / std::sqrt(double(v.size()));
+#endif
     }
 
     void standardize(MatrixXd &X, VectorXd &Y)
@@ -85,7 +93,7 @@ public:
                 for(int i = 0; i < p; i++)
                 {
                     scaleX[i] = sd_n(X.col(i));
-                    X.col(i).array() /= scaleX[i];
+                    X.col(i).array() *= (1.0 / scaleX[i]);
                 }
                 break;
             case 2:
