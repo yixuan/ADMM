@@ -30,46 +30,42 @@ extern "C"
             	double *b, const int *ldb);
 }
 
-inline void mat_vec_prod(Eigen::VectorXd &res, const Eigen::MatrixXd &X, const Eigen::VectorXd &v)
+inline void mat_vec_prod(Eigen::VectorXd &res, const Eigen::MatrixXd &X, const Eigen::VectorXd &v,
+                         const double &alpha = 1.0, const double &beta = 0.0)
 {
-    const double one = 1.0;
-    const double zero = 0.0;
     const int n = X.rows();
     const int p = X.cols();
     const int inc = 1;
 
     res.resize(n);
-    dgemv_("N", &n, &p, &one, X.data(), &n, v.data(), &inc, &zero, res.data(), &inc);
+    dgemv_("N", &n, &p, &alpha, X.data(), &n, v.data(), &inc, &beta, res.data(), &inc);
 }
 
-inline void mat_vec_prod(double *res, const double *X, const double *v, int n, int p)
+inline void mat_vec_prod(double *res, const double *X, const double *v, int n, int p,
+                         const double &alpha = 1.0, const double &beta = 0.0)
 {
-    const double one = 1.0;
-    const double zero = 0.0;
     const int inc = 1;
 
-    dgemv_("N", &n, &p, &one, X, &n, v, &inc, &zero, res, &inc);
+    dgemv_("N", &n, &p, &alpha, X, &n, v, &inc, &beta, res, &inc);
 }
 
-inline void mat_vec_tprod(Eigen::VectorXd &res, const Eigen::MatrixXd &X, const Eigen::VectorXd &v)
+inline void mat_vec_tprod(Eigen::VectorXd &res, const Eigen::MatrixXd &X, const Eigen::VectorXd &v,
+                          const double &alpha = 1.0, const double &beta = 0.0)
 {
-    const double one = 1.0;
-    const double zero = 0.0;
     const int n = X.rows();
     const int p = X.cols();
     const int inc = 1;
 
     res.resize(p);
-    dgemv_("T", &n, &p, &one, X.data(), &n, v.data(), &inc, &zero, res.data(), &inc);
+    dgemv_("T", &n, &p, &alpha, X.data(), &n, v.data(), &inc, &beta, res.data(), &inc);
 }
 
-inline void mat_vec_tprod(double *res, const double *X, const double *v, int n, int p)
+inline void mat_vec_tprod(double *res, const double *X, const double *v, int n, int p,
+                          const double &alpha = 1.0, const double &beta = 0.0)
 {
-    const double one = 1.0;
-    const double zero = 0.0;
     const int inc = 1;
 
-    dgemv_("T", &n, &p, &one, X, &n, v, &inc, &zero, res, &inc);
+    dgemv_("T", &n, &p, &alpha, X, &n, v, &inc, &beta, res, &inc);
 }
 
 // Calculating X'X
