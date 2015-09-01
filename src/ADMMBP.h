@@ -30,6 +30,7 @@ private:
     LLT solver;                   // Cholesky factorization of AA'
     VectorXd cache_AAAb;          // cache A'(AA')^(-1)b
     MatrixXd cache_LinvA;         // cache L^(-1)A, AA'=LL'
+    VectorXd workspace;
 
 
 
@@ -54,11 +55,15 @@ private:
             vec[iter.index()] += iter.value();
         std::transform(vec.data(), vec.data() + dim_dual, cache_AAAb.data(), res.data(), std::plus<double>());
 
+// Version 1
         // VectorXd tmp = datX * vec;
         // vec.noalias() = datX.transpose() * solver.solve(tmp);
         // res -= vec;
-
-        res.noalias() -= cache_LinvA.transpose() * (cache_LinvA * vec);
+// Version 2
+        // res.noalias() -= cache_LinvA.transpose() * (cache_LinvA * vec);
+// Version 3
+        Linalg::mat_vec_prod(workspace, cache_LinvA, vec);
+        Linalg::mat_vec_tprod(res, cache_LinvA, workspace, -1.0, 1.0);
     }
 
     static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
@@ -155,7 +160,8 @@ public:
            double eps_rel_ = 1e-6) :
         FADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
                   eps_abs_, eps_rel_),
-        datX(datX_.data(), datX_.rows(), datX_.cols())
+        datX(datX_.data(), datX_.rows(), datX_.cols()),
+        workspace(datX_.cols())
     {
         MatrixXd XX;
         Linalg::tcross_prod_lower(XX, datX_);
