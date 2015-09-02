@@ -45,6 +45,11 @@ protected:
 
     VectorXd cache_Ax;            // cache Ax
     VectorXd tmp;
+#ifdef __AVX__
+    __m256d *loadedX;
+    int nrowx;
+    int ncolx;
+#endif
 
     // x -> Ax
     void A_mult(VectorXd &res, SparseVector &x)
@@ -91,11 +96,15 @@ protected:
         const int *ind_ptr = res.innerIndexPtr();
         const int nnz = res.nonZeros();
 
+#ifdef __AVX__
+        int lenx;
+        __m256d *loaded_tmp = load_vec_avx(tmp.data(), dim_dual, lenx);
+#endif
         #pragma omp parallel for
         for(int i = 0; i < nnz; i++)
         {
 #ifdef __AVX__
-            const double val = val_ptr[i] - inner_product_avx(tmp.data(), datX.data() + ind_ptr[i] * dim_dual, dim_dual);
+            const double val = val_ptr[i] - loaded_inner_product_avx(loaded_tmp, loadedX + ind_ptr[i] * lenx, lenx);
 #else
             const double val = val_ptr[i] - tmp.dot(datX.col(ind_ptr[i]));
 #endif
@@ -108,6 +117,10 @@ protected:
                 val_ptr[i] = 0.0;
         }
 
+#ifdef __AVX__
+        free(loaded_tmp);
+#endif
+
         res.prune(0.0);
     }
 
@@ -118,7 +131,12 @@ protected:
             const double gamma = sprad;
             tmp.noalias() = cache_Ax + aux_z + dual_y / rho;
             VectorXd vec(dim_main);
+#ifdef __AVX__
+            mat_vec_tprod_avx(vec, datX, tmp);
+            vec *= (-1.0 / gamma);
+#else
             vec.noalias() = -datX.transpose() * tmp / gamma;
+#endif
             vec += main_x;
             soft_threshold(res, vec, lambda / (rho * gamma));
         } else {
@@ -129,7 +147,8 @@ protected:
     virtual void next_z(VectorXd &res)
     {
 #ifdef __AVX__
-        mat_spvec_product_avx(cache_Ax, datX, main_x);
+        // mat_spvec_prod_avx(cache_Ax, datX, main_x);
+        loaded_mat_spvec_prod_avx(cache_Ax.data(), dim_dual, loadedX, nrowx, ncolx, main_x);
 #else
         cache_Ax.noalias() = datX * main_x;
 #endif
@@ -179,6 +198,18 @@ public:
         eigs.compute(10, 0.1);
         VectorXd evals = eigs.ritzvalues();
         sprad = evals[0];
+
+#ifdef __AVX__
+        ncolx = datX.cols();
+        loadedX = load_mat_avx(datX.data(), datX.rows(), datX.cols(), nrowx);
+#endif
+    }
+
+    virtual ~ADMMLasso()
+    {
+#ifdef __AVX__
+        free(loadedX);
+#endif
     }
 
     double get_lambda_zero() { return lambda0; }
