@@ -7,7 +7,7 @@
 #ifdef __AVX__
 #include <immintrin.h>
 
-__m256d *load_mat_avx(const double *mat, const int nrow, const int ncol, int &nrowx)
+inline __m256d *load_mat_avx(const double *mat, const int nrow, const int ncol, int &nrowx)
 {
     const int npack = nrow / 4;
     const int tail = nrow - npack * 4;
@@ -37,7 +37,7 @@ __m256d *load_mat_avx(const double *mat, const int nrow, const int ncol, int &nr
     return ret;
 }
 
-__m256d *load_vec_avx(const double *vec, const int len, int &lenx)
+inline __m256d *load_vec_avx(const double *vec, const int len, int &lenx)
 {
     const int npack = len / 4;
     const int tail = len - npack * 4;
@@ -192,9 +192,9 @@ inline double inner_product_avx(const double *x, const double *y, const int len)
     return r;
 }
 
-void loaded_mat_spvec_prod_avx(double *res, const int len,
-                               const __m256d *mat, const int nrowx, const int ncolx,
-                               const Eigen::SparseVector<double> &spvec)
+inline void loaded_mat_spvec_prod_avx(double *res, const int len,
+                                      const __m256d *mat, const int nrowx, const int ncolx,
+                                      const Eigen::SparseVector<double> &spvec)
 {
     // Create an array of __m256d to store the result
     __m256d *r;
@@ -246,7 +246,7 @@ void loaded_mat_spvec_prod_avx(double *res, const int len,
     free(r);
 }
 
-void mat_spvec_prod_avx(Eigen::VectorXd &res, const Eigen::Map<const Eigen::MatrixXd> &mat, const Eigen::SparseVector<double> &spvec)
+inline void mat_spvec_prod_avx(Eigen::VectorXd &res, const Eigen::Map<const Eigen::MatrixXd> &mat, const Eigen::SparseVector<double> &spvec)
 {
     const int nrow = mat.rows();
     double *res_ptr = res.data();
@@ -293,7 +293,7 @@ void mat_spvec_prod_avx(Eigen::VectorXd &res, const Eigen::Map<const Eigen::Matr
      }
 }
 
-void mat_vec_tprod_avx(Eigen::VectorXd &res_, const Eigen::Ref<const Eigen::MatrixXd> &mat_, const Eigen::Ref<const Eigen::VectorXd> &vec_)
+inline void mat_vec_tprod_avx(Eigen::VectorXd &res_, const Eigen::Ref<const Eigen::MatrixXd> &mat_, const Eigen::Ref<const Eigen::VectorXd> &vec_)
 {
     const double *mat = mat_.data();
     const double *vec = vec_.data();
