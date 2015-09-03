@@ -46,7 +46,7 @@ protected:
     VectorXd cache_Ax;            // cache Ax
     VectorXd tmp;
 #ifdef __AVX__
-    __m256d *loadedX;
+    __m256d *loaded_X;
     int nrowx;
     int ncolx;
 #endif
@@ -104,7 +104,7 @@ protected:
         for(int i = 0; i < nnz; i++)
         {
 #ifdef __AVX__
-            const double val = val_ptr[i] - loaded_inner_product_avx(loaded_tmp, loadedX + ind_ptr[i] * lenx, lenx);
+            const double val = val_ptr[i] - loaded_inner_product_avx(loaded_tmp, loaded_X + ind_ptr[i] * nrowx, lenx);
 #else
             const double val = val_ptr[i] - tmp.dot(datX.col(ind_ptr[i]));
 #endif
@@ -147,8 +147,7 @@ protected:
     virtual void next_z(VectorXd &res)
     {
 #ifdef __AVX__
-        // mat_spvec_prod_avx(cache_Ax, datX, main_x);
-        loaded_mat_spvec_prod_avx(cache_Ax.data(), dim_dual, loadedX, nrowx, ncolx, main_x);
+        loaded_mat_spvec_prod_avx(cache_Ax.data(), dim_dual, loaded_X, nrowx, ncolx, main_x);
 #else
         cache_Ax.noalias() = datX * main_x;
 #endif
@@ -201,14 +200,14 @@ public:
 
 #ifdef __AVX__
         ncolx = datX.cols();
-        loadedX = load_mat_avx(datX.data(), datX.rows(), datX.cols(), nrowx);
+        loaded_X = load_mat_avx(datX.data(), datX.rows(), datX.cols(), nrowx);
 #endif
     }
 
     virtual ~ADMMLasso()
     {
 #ifdef __AVX__
-        free(loadedX);
+        free(loaded_X);
 #endif
     }
 
