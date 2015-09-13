@@ -7,60 +7,290 @@
 #ifdef __AVX__
 #include <immintrin.h>
 
-inline __m256d *load_mat_avx(const double *mat, const int nrow, const int ncol, int &nrowx)
+class vtrMatrixf
 {
-    const int npack = nrow / 4;
-    const int tail = nrow - npack * 4;
-    nrowx = npack + int(tail != 0);
-    double rem[4] = {0, 0, 0, 0};
+private:
+    typedef const Eigen::Ref<const Eigen::MatrixXd> ConstGenericMatrix;
 
-    __m256d *loaded, *ret;
-    posix_memalign((void **)&loaded, 32, nrowx * ncol * sizeof(__m256d));
-    ret = loaded;
+    __m256 *data;
+    __m256 *vdata;
+    __m256 *mdata;
 
-    const double *colptr;
-    for(int i = 0; i < ncol; i++)
+    const int nrow;
+    const int ncol;
+    int nrowx;
+
+public:
+    vtrMatrixf(ConstGenericMatrix &mat) :
+        nrow(mat.rows()),
+        ncol(mat.cols())
     {
-        colptr = mat + nrow * i;
-        for(int j = 0; j < npack; j++, colptr += 4, loaded++)
-            *loaded = _mm256_loadu_pd(colptr);
+        const int npack = nrow / 8;
+        const int tail = nrow - npack * 8;
+        nrowx = npack + int(tail != 0);
+
+        float *rem;
+        posix_memalign((void **)&rem, 32, 8 * sizeof(float));
+        std::fill(rem, rem + 8, float(0));
+
+        __m256 *data_ptr;
+        posix_memalign((void **)&data, 32, nrowx * (ncol + 1) * sizeof(__m256));
+        vdata = data;
+        mdata = data + nrowx;
+        data_ptr = mdata;
+
+        const double *mat0 = mat.data();
+        const double *col_ptr;
+        const __m256 *end_ptr;
+
+        if(tail == 0)
+        {
+            for(int i = 0; i < ncol; i++)
+            {
+                col_ptr = mat0 + nrow * i;
+                end_ptr = data_ptr + npack;
+                for( ; data_ptr < end_ptr; col_ptr += 8, data_ptr++)
+                    *data_ptr = _mm256_setr_ps(float(col_ptr[0]), float(col_ptr[1]), float(col_ptr[2]), float(col_ptr[3]),
+                                               float(col_ptr[4]), float(col_ptr[5]), float(col_ptr[6]), float(col_ptr[7]));
+            }
+        } else {
+            for(int i = 0; i < ncol; i++)
+            {
+                col_ptr = mat0 + nrow * i;
+                end_ptr = data_ptr + npack;
+                for( ; data_ptr < end_ptr; col_ptr += 8, data_ptr++)
+                    *data_ptr = _mm256_setr_ps(float(col_ptr[0]), float(col_ptr[1]), float(col_ptr[2]), float(col_ptr[3]),
+                                               float(col_ptr[4]), float(col_ptr[5]), float(col_ptr[6]), float(col_ptr[7]));
+                for(int j = 0; j < tail; j++, col_ptr++)
+                    rem[j] = float(*col_ptr);
+
+                *data_ptr = _mm256_load_ps(rem);
+                data_ptr++;
+            }
+        }
+
+        free(rem);
+
+    }
+
+    ~vtrMatrixf()
+    {
+        free(data);
+    }
+
+    void read_vec(const double *vec)
+    {
+        const int npack = nrow / 8;
+        const int tail = nrow - npack * 8;
+
+        float *rem;
+        posix_memalign((void **)&rem, 32, 8 * sizeof(float));
+        std::fill(rem, rem + 8, float(0));
+
+        __m256 *data_ptr = vdata;
+        __m256 *end_ptr = data_ptr + npack;
+        for( ; data_ptr < end_ptr; vec += 8, data_ptr++)
+            *data_ptr = _mm256_setr_ps(float(vec[0]), float(vec[1]), float(vec[2]), float(vec[3]),
+                                       float(vec[4]), float(vec[5]), float(vec[6]), float(vec[7]));
+
         if(tail != 0)
         {
-            for(int j = 0; j < tail; j++, colptr++)
-                rem[j] = *colptr;
+            for(int j = 0; j < tail; j++, vec++)
+                rem[j] = float(*vec);
 
-             *loaded = _mm256_loadu_pd(rem);
-             loaded++;
+            *data_ptr = _mm256_load_ps(rem);
+        }
+
+        free(rem);
+    }
+
+    void mult_spvec(const Eigen::SparseVector<double> &spvec, double *res)
+    {
+        __m256 *v_ptr = vdata;
+        for( ; v_ptr < mdata; v_ptr++)
+            *v_ptr = _mm256_setzero_ps();
+
+        __m256 c;  // Constant 8-vector
+        const __m256 *col_ptr;  // Pointing to columns of mat
+        const __m256 *end_ptr;
+
+        int npack = nrowx / 8;
+        int mainlen = npack * 8;
+
+        for(Eigen::SparseVector<double>::InnerIterator iter(spvec); iter; ++iter)
+        {
+            col_ptr = mdata + nrowx * iter.index();
+            v_ptr = vdata;
+            end_ptr = v_ptr + mainlen;
+            c = _mm256_set1_ps(float(iter.value()));
+            for( ; v_ptr < end_ptr; col_ptr += 8, v_ptr += 8)
+            {
+                v_ptr[0] = _mm256_add_ps(v_ptr[0], _mm256_mul_ps(col_ptr[0], c));
+                v_ptr[1] = _mm256_add_ps(v_ptr[1], _mm256_mul_ps(col_ptr[1], c));
+                v_ptr[2] = _mm256_add_ps(v_ptr[2], _mm256_mul_ps(col_ptr[2], c));
+                v_ptr[3] = _mm256_add_ps(v_ptr[3], _mm256_mul_ps(col_ptr[3], c));
+                v_ptr[4] = _mm256_add_ps(v_ptr[4], _mm256_mul_ps(col_ptr[4], c));
+                v_ptr[5] = _mm256_add_ps(v_ptr[5], _mm256_mul_ps(col_ptr[5], c));
+                v_ptr[6] = _mm256_add_ps(v_ptr[6], _mm256_mul_ps(col_ptr[6], c));
+                v_ptr[7] = _mm256_add_ps(v_ptr[7], _mm256_mul_ps(col_ptr[7], c));
+            }
+
+            for( ; v_ptr < mdata; col_ptr++, v_ptr++)
+                *v_ptr = _mm256_add_ps(*v_ptr, _mm256_mul_ps(*col_ptr, c));
+         }
+
+        npack = nrow / 8;
+        mainlen = npack * 8;
+
+        float *resf, *r;
+        posix_memalign((void **)&resf, 32, nrow * sizeof(float));
+        r = resf;
+
+        for(int i = 0; i < npack; i++, resf += 8)
+            _mm256_store_ps(resf, vdata[i]);
+        if(nrowx > npack)
+        {
+            float rem[8];
+            _mm256_storeu_ps(rem, vdata[nrowx - 1]);
+            for(int i = 0; i < nrow - mainlen; i++, resf++)
+                *resf = rem[i];
+        }
+        std::copy(r, r + nrow, res);
+
+        free(r);
+    }
+
+    void mult_vec(const Eigen::VectorXd &vec, double *res)
+    {
+        __m256 *v_ptr = vdata;
+        for( ; v_ptr < mdata; v_ptr++)
+            *v_ptr = _mm256_setzero_ps();
+
+        __m256 c;  // Constant 8-vector
+        const __m256 *col_ptr;  // Pointing to columns of mat
+        const __m256 *end_ptr;
+
+        int npack = nrowx / 8;
+        int mainlen = npack * 8;
+
+        const double *vec_ptr = vec.data();
+        for(int i = 0; i < ncol; i++)
+        {
+            col_ptr = mdata + nrowx * i;
+            v_ptr = vdata;
+            end_ptr = v_ptr + mainlen;
+            c = _mm256_set1_ps(float(vec_ptr[i]));
+            for( ; v_ptr < end_ptr; col_ptr += 8, v_ptr += 8)
+            {
+                v_ptr[0] = _mm256_add_ps(v_ptr[0], _mm256_mul_ps(col_ptr[0], c));
+                v_ptr[1] = _mm256_add_ps(v_ptr[1], _mm256_mul_ps(col_ptr[1], c));
+                v_ptr[2] = _mm256_add_ps(v_ptr[2], _mm256_mul_ps(col_ptr[2], c));
+                v_ptr[3] = _mm256_add_ps(v_ptr[3], _mm256_mul_ps(col_ptr[3], c));
+                v_ptr[4] = _mm256_add_ps(v_ptr[4], _mm256_mul_ps(col_ptr[4], c));
+                v_ptr[5] = _mm256_add_ps(v_ptr[5], _mm256_mul_ps(col_ptr[5], c));
+                v_ptr[6] = _mm256_add_ps(v_ptr[6], _mm256_mul_ps(col_ptr[6], c));
+                v_ptr[7] = _mm256_add_ps(v_ptr[7], _mm256_mul_ps(col_ptr[7], c));
+            }
+
+            for( ; v_ptr < mdata; col_ptr++, v_ptr++)
+                *v_ptr = _mm256_add_ps(*v_ptr, _mm256_mul_ps(*col_ptr, c));
+         }
+
+        npack = nrow / 8;
+        mainlen = npack * 8;
+
+        float *resf, *r;
+        posix_memalign((void **)&resf, 32, nrow * sizeof(float));
+        r = resf;
+
+        for(int i = 0; i < npack; i++, resf += 8)
+            _mm256_store_ps(resf, vdata[i]);
+        if(nrowx > npack)
+        {
+            float rem[8];
+            _mm256_storeu_ps(rem, vdata[nrowx - 1]);
+            for(int i = 0; i < nrow - mainlen; i++, resf++)
+                *resf = rem[i];
+        }
+        std::copy(r, r + nrow, res);
+
+        free(r);
+    }
+
+    // http://stackoverflow.com/questions/13219146/how-to-sum-m256-horizontally
+    static inline float _mm256_reduce_add_ps(__m256 x)
+    {
+        /* ( x3+x7, x2+x6, x1+x5, x0+x4 ) */
+        const __m128 x128 = _mm_add_ps(_mm256_extractf128_ps(x, 1), _mm256_castps256_ps128(x));
+        /* ( -, -, x1+x3+x5+x7, x0+x2+x4+x6 ) */
+        const __m128 x64 = _mm_add_ps(x128, _mm_movehl_ps(x128, x128));
+        /* ( -, -, -, x0+x1+x2+x3+x4+x5+x6+x7 ) */
+        const __m128 x32 = _mm_add_ss(x64, _mm_shuffle_ps(x64, x64, 0x55));
+        /* Conversion to float is a no-op on x86-64 */
+        return _mm_cvtss_f32(x32);
+    }
+
+    void trans_mult_vec(const Eigen::VectorXd &vec, double *res)
+    {
+        read_vec(vec.data());
+
+        const int npack = nrowx / 8;
+        const int mainlen = npack * 8;
+
+        // Loop over columns
+        #pragma omp parallel for num_threads(2)
+        for(int i = 0; i < ncol; i++)
+        {
+            __m256 *col_ptr = mdata + nrowx * i;
+            __m256 *v_ptr = vdata;
+            __m256 *end_ptr = v_ptr + mainlen;
+            __m256 r = _mm256_setzero_ps();
+            for( ; v_ptr < end_ptr; col_ptr += 8, v_ptr += 8)
+            {
+                r = _mm256_add_ps(r, _mm256_mul_ps(v_ptr[0], col_ptr[0]));
+                r = _mm256_add_ps(r, _mm256_mul_ps(v_ptr[1], col_ptr[1]));
+                r = _mm256_add_ps(r, _mm256_mul_ps(v_ptr[2], col_ptr[2]));
+                r = _mm256_add_ps(r, _mm256_mul_ps(v_ptr[3], col_ptr[3]));
+                r = _mm256_add_ps(r, _mm256_mul_ps(v_ptr[4], col_ptr[4]));
+                r = _mm256_add_ps(r, _mm256_mul_ps(v_ptr[5], col_ptr[5]));
+                r = _mm256_add_ps(r, _mm256_mul_ps(v_ptr[6], col_ptr[6]));
+                r = _mm256_add_ps(r, _mm256_mul_ps(v_ptr[7], col_ptr[7]));
+            }
+            for( ; v_ptr < mdata; col_ptr++, v_ptr++)
+                r = _mm256_add_ps(r, _mm256_mul_ps(*v_ptr, *col_ptr));
+
+            res[i] = _mm256_reduce_add_ps(r);
+            // float *p = (float *)&r;
+            // res[i] = p[0] + p[1] + p[2] + p[3] + p[4] + p[5] + p[6] + p[7];
         }
     }
 
-    return ret;
-}
-
-inline __m256d *load_vec_avx(const double *vec, const int len, int &lenx)
-{
-    const int npack = len / 4;
-    const int tail = len - npack * 4;
-    lenx = npack + int(tail != 0);
-    double rem[4] = {0, 0, 0, 0};
-
-    __m256d *loaded, *ret;
-    posix_memalign((void **)&loaded, 32, lenx * sizeof(__m256d));
-    ret = loaded;
-
-    const double *ptr = vec;
-    for(int j = 0; j < npack; j++, ptr += 4, loaded++)
-        *loaded = _mm256_loadu_pd(ptr);
-    if(tail != 0)
+    double ith_inner_product(const int i)
     {
-        for(int j = 0; j < tail; j++, ptr++)
-            rem[j] = *ptr;
+        const int npack = nrowx / 8;
+        const int mainlen = npack * 8;
 
-         *loaded = _mm256_loadu_pd(rem);
+        __m256 *col_ptr = mdata + nrowx * i;
+        __m256 *v_ptr = vdata;
+        __m256 *end_ptr = v_ptr + mainlen;
+        __m256 r = _mm256_setzero_ps();
+        for( ; v_ptr < end_ptr; col_ptr += 8, v_ptr += 8)
+        {
+            r = _mm256_add_ps(r, _mm256_mul_ps(v_ptr[0], col_ptr[0]));
+            r = _mm256_add_ps(r, _mm256_mul_ps(v_ptr[1], col_ptr[1]));
+            r = _mm256_add_ps(r, _mm256_mul_ps(v_ptr[2], col_ptr[2]));
+            r = _mm256_add_ps(r, _mm256_mul_ps(v_ptr[3], col_ptr[3]));
+            r = _mm256_add_ps(r, _mm256_mul_ps(v_ptr[4], col_ptr[4]));
+            r = _mm256_add_ps(r, _mm256_mul_ps(v_ptr[5], col_ptr[5]));
+            r = _mm256_add_ps(r, _mm256_mul_ps(v_ptr[6], col_ptr[6]));
+            r = _mm256_add_ps(r, _mm256_mul_ps(v_ptr[7], col_ptr[7]));
+        }
+        for( ; v_ptr < mdata; col_ptr++, v_ptr++)
+            r = _mm256_add_ps(r, _mm256_mul_ps(*v_ptr, *col_ptr));
+
+        return _mm256_reduce_add_ps(r);
     }
-
-    return ret;
-}
+};
 
 inline void get_ss_avx(const double *x, const int len, double &sum, double &sum_of_square)
 {
@@ -130,33 +360,6 @@ inline void standardize_vec_avx(double *x, const int len, const double center, c
         *x = (*x - center) * scale;
 }
 
-inline double loaded_inner_product_avx(const __m256d *x, const __m256d *y, const int lenx)
-{
-    __m256d res = _mm256_setzero_pd();
-
-    const int npack = lenx / 8;
-    const int mainlen = npack * 8;
-
-    for(int i = 0; i < npack; i++, x += 8, y += 8)
-    {
-        res = _mm256_add_pd(res, _mm256_mul_pd(x[0], y[0]));
-        res = _mm256_add_pd(res, _mm256_mul_pd(x[1], y[1]));
-        res = _mm256_add_pd(res, _mm256_mul_pd(x[2], y[2]));
-        res = _mm256_add_pd(res, _mm256_mul_pd(x[3], y[3]));
-        res = _mm256_add_pd(res, _mm256_mul_pd(x[4], y[4]));
-        res = _mm256_add_pd(res, _mm256_mul_pd(x[5], y[5]));
-        res = _mm256_add_pd(res, _mm256_mul_pd(x[6], y[6]));
-        res = _mm256_add_pd(res, _mm256_mul_pd(x[7], y[7]));
-    }
-
-    for(int i = mainlen; i < lenx; i++, x++, y++)
-        res = _mm256_add_pd(res, _mm256_mul_pd(*x, *y));
-
-    res = _mm256_hadd_pd(res, res);
-    double *resp = (double*) &res;
-    return resp[0] + resp[2];
-}
-
 inline double inner_product_avx(const double *x, const double *y, const int len)
 {
     __m256d xx;
@@ -190,60 +393,6 @@ inline double inner_product_avx(const double *x, const double *y, const int len)
         r += (*x) * (*y);
 
     return r;
-}
-
-inline void loaded_mat_spvec_prod_avx(double *res, const int len,
-                                      const __m256d *mat, const int nrowx, const int ncolx,
-                                      const Eigen::SparseVector<double> &spvec)
-{
-    // Create an array of __m256d to store the result
-    __m256d *r;
-    posix_memalign((void **)&r, 32, nrowx * sizeof(__m256d));
-    for(int i = 0; i < nrowx; i++)
-        r[i] = _mm256_setzero_pd();
-
-    __m256d c;  // Constant 4-vector
-    const __m256d *colptr;  // Pointing to columns of mat
-    __m256d *vptr;  // Pointing to elements of r
-
-    int npack = nrowx / 8;
-    int mainlen = npack * 8;
-
-    for(Eigen::SparseVector<double>::InnerIterator iter(spvec); iter; ++iter)
-    {
-        colptr = mat + nrowx * iter.index();
-        vptr = r;
-        c = _mm256_set1_pd(iter.value());
-
-        for(int i = 0; i < npack; i++, colptr += 8, vptr += 8)
-        {
-            vptr[0] = _mm256_add_pd(vptr[0], _mm256_mul_pd(colptr[0], c));
-            vptr[1] = _mm256_add_pd(vptr[1], _mm256_mul_pd(colptr[1], c));
-            vptr[2] = _mm256_add_pd(vptr[2], _mm256_mul_pd(colptr[2], c));
-            vptr[3] = _mm256_add_pd(vptr[3], _mm256_mul_pd(colptr[3], c));
-            vptr[4] = _mm256_add_pd(vptr[4], _mm256_mul_pd(colptr[4], c));
-            vptr[5] = _mm256_add_pd(vptr[5], _mm256_mul_pd(colptr[5], c));
-            vptr[6] = _mm256_add_pd(vptr[6], _mm256_mul_pd(colptr[6], c));
-            vptr[7] = _mm256_add_pd(vptr[7], _mm256_mul_pd(colptr[7], c));
-        }
-        for(int i = mainlen; i < nrowx; i++, colptr++, vptr++)
-            *vptr = _mm256_add_pd(*vptr, _mm256_mul_pd(*colptr, c));
-     }
-
-    npack = len / 4;
-    mainlen = npack * 4;
-
-    for(int i = 0; i < npack; i++, res += 4)
-        _mm256_storeu_pd(res, r[i]);
-    if(nrowx > npack)
-    {
-        double rem[4];
-        _mm256_storeu_pd(rem, r[nrowx - 1]);
-        for(int i = 0; i < len - mainlen; i++, res++)
-            *res = rem[i];
-    }
-
-    free(r);
 }
 
 inline void mat_spvec_prod_avx(Eigen::VectorXd &res, const Eigen::Map<const Eigen::MatrixXd> &mat, const Eigen::SparseVector<double> &spvec)
