@@ -185,14 +185,13 @@ public:
               double eps_rel_ = 1e-6) :
         ADMMBase(datX_.cols(), datX_.rows(), datX_.rows(),
                  eps_abs_, eps_rel_),
-        datX(datX_.cast<Scalar>()),
-        datY(datY_.cast<Scalar>()),
+        datX(dim_dual, dim_main),
+        datY(dim_dual),
         cache_Ax(dim_dual), tmp(dim_dual)
-#ifdef __AVX__
-        ,
-        vtrX(datX)
-#endif
     {
+        // datX_ and datY_ are double, datX and datY are float
+        std::copy(datX_.data(), datX_.data() + dim_dual * dim_main, datX.data());
+        std::copy(datY_.data(), datY_.data() + dim_dual, datY.data());
         lambda0 = (datX.transpose() * datY).cwiseAbs().maxCoeff();
 
         Matrix XX;
@@ -204,6 +203,10 @@ public:
         eigs.compute(10, 0.1);
         Eigen::VectorXf evals = eigs.ritzvalues();
         sprad = evals[0];
+
+#ifdef __AVX__
+        vtrX.read_mat(datX);
+#endif
     }
 
     double get_lambda_zero() { return lambda0; }

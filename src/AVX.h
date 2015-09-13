@@ -16,15 +16,17 @@ private:
     __m256 *vdata;
     __m256 *mdata;
 
-    const int nrow;
-    const int ncol;
+    int nrow;
+    int ncol;
     int nrowx;
 
 public:
-    vtrMatrixf(ConstGenericMatrix &mat) :
-        nrow(mat.rows()),
-        ncol(mat.cols())
+    vtrMatrixf() {}
+
+    void read_mat(ConstGenericMatrix &mat)
     {
+        nrow = mat.rows();
+        ncol = mat.cols();
         const int npack = nrow / 8;
         const int tail = nrow - npack * 8;
         nrowx = npack + int(tail != 0);
