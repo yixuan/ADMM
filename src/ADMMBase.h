@@ -9,19 +9,17 @@
 //
 // x(n, 1), z(m, 1), A(p, n), B(p, m), c(p, 1)
 //
-template<typename VecTypeX, typename VecTypeZ>
+template<typename VecTypeX, typename VecTypeZ, typename VecTypeY>
 class ADMMBase
 {
 protected:
-    typedef Eigen::VectorXd VectorXd;
-
     const int dim_main;   // dimension of x
     const int dim_aux;    // dimension of z
     const int dim_dual;   // dimension of Ax + Bz - c
 
     VecTypeX main_x;      // parameters to be optimized
     VecTypeZ aux_z;       // auxiliary parameters
-    VectorXd dual_y;      // Lagrangian multiplier
+    VecTypeY dual_y;      // Lagrangian multiplier
 
     double rho;           // augmented Lagrangian parameter
     const double eps_abs; // absolute tolerance
@@ -33,13 +31,13 @@ protected:
     double resid_primal;  // primal residual
     double resid_dual;    // dual residual
 
-    virtual void A_mult (VectorXd &res, VecTypeX &x) = 0;   // operation res -> Ax, x can be overwritten
-    virtual void At_mult(VectorXd &res, VectorXd &y) = 0;   // operation res -> A'y, y can be overwritten
-    virtual void B_mult (VectorXd &res, VecTypeZ &z) = 0;   // operation res -> Bz, z can be overwritten
+    virtual void A_mult (VecTypeY &res, VecTypeX &x) = 0;   // operation res -> Ax, x can be overwritten
+    virtual void At_mult(VecTypeY &res, VecTypeY &y) = 0;   // operation res -> A'y, y can be overwritten
+    virtual void B_mult (VecTypeY &res, VecTypeZ &z) = 0;   // operation res -> Bz, z can be overwritten
     virtual double c_norm() = 0;                            // L2 norm of c
 
     // res = Ax + Bz - c
-    virtual void next_residual(VectorXd &res) = 0;
+    virtual void next_residual(VecTypeY &res) = 0;
     // res = x in next iteration
     virtual void next_x(VecTypeX &res) = 0;
     // res = z in next iteration
@@ -51,7 +49,7 @@ protected:
     // eps_primal = sqrt(p) * eps_abs + eps_rel * max(||Ax||, ||Bz||, ||c||)
     virtual double compute_eps_primal()
     {
-        VectorXd xres, zres;
+        VecTypeY xres, zres;
         VecTypeX xcopy = main_x;
         VecTypeZ zcopy = aux_z;
         A_mult(xres, xcopy);
@@ -64,7 +62,7 @@ protected:
     // eps_dual = sqrt(n) * eps_abs + eps_rel * ||A'y||
     virtual double compute_eps_dual()
     {
-        VectorXd yres, ycopy = dual_y;
+        VecTypeY yres, ycopy = dual_y;
         At_mult(yres, ycopy);
 
         return yres.norm() * eps_rel + std::sqrt(double(dim_main)) * eps_abs;
@@ -74,10 +72,10 @@ protected:
     virtual double compute_resid_dual(const VecTypeZ &new_z)
     {
         VecTypeZ zdiff = new_z - aux_z;
-        VectorXd tmp;
+        VecTypeY tmp;
         B_mult(tmp, zdiff);
 
-        VectorXd dual;
+        VecTypeY dual;
         At_mult(dual, tmp);
 
         return rho * dual.norm();
@@ -126,14 +124,14 @@ public:
     }
     void update_y()
     {
-        VectorXd newr(dim_dual);
+        VecTypeY newr(dim_dual);
         next_residual(newr);
 
         resid_primal = newr.norm();
 
         // dual_y.noalias() += rho * newr;
-        std::transform(newr.data(), newr.data() + dim_dual, newr.data(), std::bind2nd(std::multiplies<double>(), rho));
-        std::transform(dual_y.data(), dual_y.data() + dim_dual, newr.data(), dual_y.data(), std::plus<double>());
+        std::transform(newr.data(), newr.data() + dim_dual, newr.data(), std::bind2nd(std::multiplies<typename VecTypeY::RealScalar>(), typename VecTypeY::RealScalar(rho)));
+        std::transform(dual_y.data(), dual_y.data() + dim_dual, newr.data(), dual_y.data(), std::plus<typename VecTypeY::RealScalar>());
     }
 
     bool converged()
@@ -161,7 +159,7 @@ public:
 
     virtual VecTypeX get_x() { return main_x; }
     virtual VecTypeZ get_z() { return aux_z; }
-    virtual VectorXd get_y() { return dual_y; }
+    virtual VecTypeY get_y() { return dual_y; }
 };
 
 
