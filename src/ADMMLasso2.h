@@ -23,12 +23,11 @@
 // c => 0
 // f(x) => lambda * ||x||_1
 // g(z) => 1/2 * ||z + b||^2
-class ADMMLasso: public ADMMBase<Eigen::SparseVector<double>, Eigen::VectorXd>
+class ADMMLasso: public ADMMBase<Eigen::SparseVector<double>, Eigen::VectorXd, Eigen::VectorXd>
 {
 protected:
     typedef Eigen::MatrixXd MatrixXd;
     typedef Eigen::VectorXd VectorXd;
-    typedef Eigen::ArrayXd ArrayXd;
     typedef Eigen::Map<const MatrixXd> MapMat;
     typedef Eigen::Map<const VectorXd> MapVec;
     typedef const Eigen::Ref<const MatrixXd> ConstGenericMatrix;
@@ -185,14 +184,15 @@ public:
     {
         lambda0 = (datX.transpose() * datY).array().abs().maxCoeff();
 
-        MatrixXd XX;
-        Linalg::tcross_prod_lower(XX, datX);
-        MatOpSymLower<double> op(XX);
-        SymEigsSolver<double, LARGEST_ALGE> eigs(&op, 1, 3);
+        Eigen::MatrixXf Xf = datX.cast<float>();
+        Eigen::MatrixXf XX;
+        Linalg::tcross_prod_lower(XX, Xf);
+        MatOpSymLower<float> op(XX);
+        SymEigsSolver<float, LARGEST_ALGE> eigs(&op, 1, 3);
         srand(0);
         eigs.init();
         eigs.compute(10, 0.1);
-        VectorXd evals = eigs.ritzvalues();
+        Eigen::VectorXf evals = eigs.ritzvalues();
         sprad = evals[0];
     }
 
