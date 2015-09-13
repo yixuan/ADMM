@@ -9,24 +9,22 @@
 //
 // x(n, 1), z(m, 1), A(p, n), B(p, m), c(p, 1)
 //
-template<typename VecTypeX, typename VecTypeZ>
+template<typename VecTypeX, typename VecTypeZ, typename VecTypeY>
 class FADMMBase
 {
 protected:
-    typedef Eigen::VectorXd VectorXd;
-
     const int dim_main;   // dimension of x
     const int dim_aux;    // dimension of z
     const int dim_dual;   // dimension of Ax + Bz - c
 
     VecTypeX main_x;      // parameters to be optimized
     VecTypeZ aux_z;       // auxiliary parameters
-    VectorXd dual_y;      // Lagrangian multiplier
+    VecTypeY dual_y;      // Lagrangian multiplier
 
     VecTypeZ adj_z;       // adjusted z vector, used for acceleration
-    VectorXd adj_y;       // adjusted y vector, used for acceleration
+    VecTypeY adj_y;       // adjusted y vector, used for acceleration
     VecTypeZ old_z;       // z vector in the previous iteration, used for acceleration
-    VectorXd old_y;       // y vector in the previous iteration, used for acceleration
+    VecTypeY old_y;       // y vector in the previous iteration, used for acceleration
     double adj_a;         // coefficient used for acceleration
     double adj_c;         // coefficient used for acceleration
 
@@ -40,13 +38,13 @@ protected:
     double resid_primal;  // primal residual
     double resid_dual;    // dual residual
 
-    virtual void A_mult (VectorXd &res, VecTypeX &x) = 0;   // operation res -> Ax, x can be overwritten
-    virtual void At_mult(VectorXd &res, VectorXd &y) = 0;   // operation res -> A'y, y can be overwritten
-    virtual void B_mult (VectorXd &res, VecTypeZ &z) = 0;   // operation res -> Bz, z can be overwritten
+    virtual void A_mult (VecTypeY &res, VecTypeX &x) = 0;   // operation res -> Ax, x can be overwritten
+    virtual void At_mult(VecTypeY &res, VecTypeY &y) = 0;   // operation res -> A'y, y can be overwritten
+    virtual void B_mult (VecTypeY &res, VecTypeZ &z) = 0;   // operation res -> Bz, z can be overwritten
     virtual double c_norm() = 0;                            // L2 norm of c
 
     // res = Ax + Bz - c
-    virtual void next_residual(VectorXd &res) = 0;
+    virtual void next_residual(VecTypeY &res) = 0;
     // res = x in next iteration
     virtual void next_x(VecTypeX &res) = 0;
     // res = z in next iteration
@@ -58,7 +56,7 @@ protected:
     // eps_primal = sqrt(p) * eps_abs + eps_rel * max(||Ax||, ||Bz||, ||c||)
     virtual double compute_eps_primal()
     {
-        VectorXd xres, zres;
+        VecTypeY xres, zres;
         VecTypeX xcopy = main_x;
         VecTypeZ zcopy = aux_z;
         A_mult(xres, xcopy);
@@ -71,7 +69,7 @@ protected:
     // eps_dual = sqrt(n) * eps_abs + eps_rel * ||A'y||
     virtual double compute_eps_dual()
     {
-        VectorXd yres, ycopy = dual_y;
+        VecTypeY yres, ycopy = dual_y;
 
         At_mult(yres, ycopy);
 
@@ -82,10 +80,10 @@ protected:
     virtual double compute_resid_dual()
     {
         VecTypeZ zdiff = aux_z - old_z;
-        VectorXd tmp;
+        VecTypeY tmp;
         B_mult(tmp, zdiff);
 
-        VectorXd dual;
+        VecTypeY dual;
         At_mult(dual, tmp);
 
         return rho * dual.norm();
@@ -95,7 +93,7 @@ protected:
     virtual double compute_resid_combined()
     {
         VecTypeZ tmp = aux_z - adj_z;
-        VectorXd tmp2;
+        VecTypeY tmp2;
         B_mult(tmp2, tmp);
 
         return rho * resid_primal * resid_primal + rho * tmp2.squaredNorm();
@@ -145,7 +143,7 @@ public:
     }
     void update_y()
     {
-        VectorXd newr(dim_dual);
+        VecTypeY newr(dim_dual);
         next_residual(newr);
 
         resid_primal = newr.norm();
@@ -202,7 +200,7 @@ public:
 
     virtual VecTypeX get_x() { return main_x; }
     virtual VecTypeZ get_z() { return aux_z; }
-    virtual VectorXd get_y() { return dual_y; }
+    virtual VecTypeY get_y() { return dual_y; }
 };
 
 
