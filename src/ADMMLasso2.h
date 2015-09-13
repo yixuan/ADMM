@@ -23,56 +23,57 @@
 // c => 0
 // f(x) => lambda * ||x||_1
 // g(z) => 1/2 * ||z + b||^2
-class ADMMLasso: public ADMMBase<Eigen::SparseVector<double>, Eigen::VectorXd, Eigen::VectorXd>
+class ADMMLasso: public ADMMBase<Eigen::SparseVector<float>, Eigen::VectorXf, Eigen::VectorXf>
 {
 protected:
-    typedef Eigen::MatrixXd MatrixXd;
-    typedef Eigen::VectorXd VectorXd;
-    typedef Eigen::Map<const MatrixXd> MapMat;
-    typedef Eigen::Map<const VectorXd> MapVec;
-    typedef const Eigen::Ref<const MatrixXd> ConstGenericMatrix;
-    typedef const Eigen::Ref<const VectorXd> ConstGenericVector;
-    typedef Eigen::SparseVector<double> SparseVector;
+    typedef float Scalar;
+    typedef Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> Matrix;
+    typedef Eigen::Matrix<Scalar, Eigen::Dynamic, 1> Vector;
+    typedef Eigen::Map<const Matrix> MapMat;
+    typedef Eigen::Map<const Vector> MapVec;
+    typedef const Eigen::Ref<const Eigen::MatrixXd> ConstGenericMatrix;
+    typedef const Eigen::Ref<const Eigen::VectorXd> ConstGenericVector;
+    typedef Eigen::SparseVector<Scalar> SparseVector;
 
-    const MapMat datX;            // pointer to data matrix
-    const MapVec datY;            // pointer response vector
-    double sprad;                 // spectral radius of X'X
-    double lambda;                // L1 penalty
-    double lambda0;               // minimum lambda to make coefficients all zero
+    Matrix datX;                  // data matrix
+    Vector datY;                  // response vector
+    Scalar sprad;                 // spectral radius of X'X
+    Scalar lambda;                // L1 penalty
+    Scalar lambda0;               // minimum lambda to make coefficients all zero
 
     int iter_counter;             // which iteration are we in?
 
-    VectorXd cache_Ax;            // cache Ax
-    VectorXd tmp;
+    Vector cache_Ax;              // cache Ax
+    Vector tmp;
 #ifdef __AVX__
     vtrMatrixf vtrX;
 #endif
 
     // x -> Ax
-    void A_mult(VectorXd &res, SparseVector &x)
+    void A_mult(Vector &res, SparseVector &x)
     {
         res.noalias() = datX * x;
     }
     // y -> A'y
-    void At_mult(VectorXd &res, VectorXd &y)
+    void At_mult(Vector &res, Vector &y)
     {
         res.noalias() = datX.transpose() * y;
     }
     // z -> Bz
-    void B_mult(VectorXd &res, VectorXd &z)
+    void B_mult(Vector &res, Vector &z)
     {
         res.swap(z);
     }
     // ||c||_2
     double c_norm() { return 0.0; }
 
-    static void soft_threshold(SparseVector &res, const VectorXd &vec, const double &penalty)
+    static void soft_threshold(SparseVector &res, const Vector &vec, const double &penalty)
     {
         int v_size = vec.size();
         res.setZero();
         res.reserve(v_size);
 
-        const double *ptr = vec.data();
+        const Scalar *ptr = vec.data();
         for(int i = 0; i < v_size; i++)
         {
             if(ptr[i] > penalty)
@@ -84,12 +85,12 @@ protected:
 
     void active_set_update(SparseVector &res)
     {
-        const double gamma = sprad;
-        double penalty = lambda / (rho * gamma);
-        tmp.noalias() = (cache_Ax + aux_z + dual_y / rho) / gamma;
+        const Scalar gamma = sprad;
+        Scalar penalty = lambda / (rho * gamma);
+        tmp.noalias() = (cache_Ax + aux_z + dual_y / Scalar(rho)) / gamma;
         res = main_x;
 
-        double *val_ptr = res.valuePtr();
+        Scalar *val_ptr = res.valuePtr();
         const int *ind_ptr = res.innerIndexPtr();
         const int nnz = res.nonZeros();
 
@@ -100,9 +101,9 @@ protected:
         for(int i = 0; i < nnz; i++)
         {
 #ifdef __AVX__
-            const double val = val_ptr[i] - vtrX.ith_inner_product(ind_ptr[i]);
+            const Scalar val = val_ptr[i] - vtrX.ith_inner_product(ind_ptr[i]);
 #else
-            const double val = val_ptr[i] - tmp.dot(datX.col(ind_ptr[i]));
+            const Scalar val = val_ptr[i] - tmp.dot(datX.col(ind_ptr[i]));
 #endif
 
             if(val > penalty)
@@ -116,13 +117,23 @@ protected:
         res.prune(0.0);
     }
 
+    // 4^k - 1, k = 0, 1, 2, ...
+    static bool is_regular_update(unsigned int x)
+    {
+        if(x == 0 || x == 3 || x == 15 || x == 63)  return true;
+        x++;
+        if( x & (x - 1) )  return false;
+        return x & 0x55555555;
+    }
+
     void next_x(SparseVector &res)
     {
-        if(iter_counter % 10 == 0 && lambda < lambda0)
+        // iter_counter = 0, 3, 15, 63, .... (4^k - 1)
+        if(is_regular_update(iter_counter) && lambda < lambda0)
         {
-            const double gamma = sprad;
-            tmp.noalias() = cache_Ax + aux_z + dual_y / rho;
-            VectorXd vec(dim_main);
+            const Scalar gamma = sprad;
+            tmp.noalias() = cache_Ax + aux_z + dual_y / Scalar(rho);
+            Vector vec(dim_main);
 #ifdef __AVX__
             vtrX.trans_mult_vec(tmp, vec.data());
             vec *= (-1.0 / gamma);
@@ -136,7 +147,7 @@ protected:
         }
         iter_counter++;
     }
-    virtual void next_z(VectorXd &res)
+    virtual void next_z(Vector &res)
     {
 #ifdef __AVX__
         vtrX.mult_spvec(main_x, cache_Ax.data());
@@ -144,12 +155,12 @@ protected:
         cache_Ax.noalias() = datX * main_x;
 #endif
 
-        res.noalias() = (datY + dual_y + rho * cache_Ax) / (-1 - rho);
+        res.noalias() = (datY + dual_y + Scalar(rho) * cache_Ax) / Scalar(-1 - rho);
     }
-    void next_residual(VectorXd &res)
+    void next_residual(Vector &res)
     {
         // res.noalias() = cache_Ax + aux_z;
-        std::transform(cache_Ax.data(), cache_Ax.data() + dim_dual, aux_z.data(), res.data(), std::plus<double>());
+        std::transform(cache_Ax.data(), cache_Ax.data() + dim_dual, aux_z.data(), res.data(), std::plus<Scalar>());
     }
     void rho_changed_action() {}
 
@@ -163,7 +174,7 @@ protected:
     {
         return std::sqrt(sprad) * dual_y.norm() * eps_rel + std::sqrt(double(dim_main)) * eps_abs;
     }
-    double compute_resid_dual(const VectorXd &new_z)
+    double compute_resid_dual(const Vector &new_z)
     {
         return rho * std::sqrt(sprad) * (new_z - aux_z).norm();
     }
@@ -174,21 +185,20 @@ public:
               double eps_rel_ = 1e-6) :
         ADMMBase(datX_.cols(), datX_.rows(), datX_.rows(),
                  eps_abs_, eps_rel_),
-        datX(datX_.data(), datX_.rows(), datX_.cols()),
-        datY(datY_.data(), datY_.size()),
+        datX(datX_.cast<Scalar>()),
+        datY(datY_.cast<Scalar>()),
         cache_Ax(dim_dual), tmp(dim_dual)
 #ifdef __AVX__
         ,
         vtrX(datX)
 #endif
     {
-        lambda0 = (datX.transpose() * datY).array().abs().maxCoeff();
+        lambda0 = (datX.transpose() * datY).cwiseAbs().maxCoeff();
 
-        Eigen::MatrixXf Xf = datX.cast<float>();
-        Eigen::MatrixXf XX;
-        Linalg::tcross_prod_lower(XX, Xf);
-        MatOpSymLower<float> op(XX);
-        SymEigsSolver<float, LARGEST_ALGE> eigs(&op, 1, 3);
+        Matrix XX;
+        Linalg::tcross_prod_lower(XX, datX);
+        MatOpSymLower<Scalar> op(XX);
+        SymEigsSolver<Scalar, LARGEST_ALGE> eigs(&op, 1, 3);
         srand(0);
         eigs.init();
         eigs.compute(10, 0.1);

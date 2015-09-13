@@ -29,6 +29,9 @@ extern "C"
     void dsyrk_(const char* uplo, const char* transA, const int* n, const int* k,
                 const double* alpha, const double* A, const int* ldA,
                 const double* beta, double* C, const int* ldC);
+    void ssyrk_(const char* uplo, const char* transA, const int* n, const int* k,
+                const float* alpha, const float* A, const int* ldA,
+                const float* beta, float* C, const int* ldC);
     void dtrsm_(const char *side, const char *uplo,
             	const char *transa, const char *diag,
             	const int *m, const int *n, const double *alpha,
@@ -138,6 +141,23 @@ inline void tcross_prod_lower(Eigen::MatrixXd &res, ConstGenericMatrix &X)
     double *res_ptr = res.data();
 
     dsyrk_("L", "N", &n, &p,
+           &one, x_ptr, &n,
+           &zero, res_ptr, &n);
+}
+
+inline void tcross_prod_lower(Eigen::MatrixXf &res, const Eigen::MatrixXf &X)
+{
+    const float one = 1.0;
+    const float zero = 0.0;
+
+    const int n = X.rows();
+    const int p = X.cols();
+    const float *x_ptr = X.data();
+
+    res.resize(n, n);
+    float *res_ptr = res.data();
+
+    ssyrk_("L", "N", &n, &p,
            &one, x_ptr, &n,
            &zero, res_ptr, &n);
 }

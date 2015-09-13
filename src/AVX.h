@@ -10,7 +10,7 @@
 class vtrMatrixf
 {
 private:
-    typedef const Eigen::Ref<const Eigen::MatrixXd> ConstGenericMatrix;
+    typedef const Eigen::Ref<const Eigen::MatrixXf> ConstGenericMatrix;
 
     __m256 *data;
     __m256 *vdata;
@@ -39,8 +39,8 @@ public:
         mdata = data + nrowx;
         data_ptr = mdata;
 
-        const double *mat0 = mat.data();
-        const double *col_ptr;
+        const float *mat0 = mat.data();
+        const float *col_ptr;
         const __m256 *end_ptr;
 
         if(tail == 0)
@@ -50,8 +50,7 @@ public:
                 col_ptr = mat0 + nrow * i;
                 end_ptr = data_ptr + npack;
                 for( ; data_ptr < end_ptr; col_ptr += 8, data_ptr++)
-                    *data_ptr = _mm256_setr_ps(float(col_ptr[0]), float(col_ptr[1]), float(col_ptr[2]), float(col_ptr[3]),
-                                               float(col_ptr[4]), float(col_ptr[5]), float(col_ptr[6]), float(col_ptr[7]));
+                    *data_ptr = _mm256_loadu_ps(col_ptr);
             }
         } else {
             for(int i = 0; i < ncol; i++)
@@ -59,8 +58,7 @@ public:
                 col_ptr = mat0 + nrow * i;
                 end_ptr = data_ptr + npack;
                 for( ; data_ptr < end_ptr; col_ptr += 8, data_ptr++)
-                    *data_ptr = _mm256_setr_ps(float(col_ptr[0]), float(col_ptr[1]), float(col_ptr[2]), float(col_ptr[3]),
-                                               float(col_ptr[4]), float(col_ptr[5]), float(col_ptr[6]), float(col_ptr[7]));
+                    *data_ptr = _mm256_loadu_ps(col_ptr);
                 for(int j = 0; j < tail; j++, col_ptr++)
                     rem[j] = float(*col_ptr);
 
@@ -78,7 +76,7 @@ public:
         free(data);
     }
 
-    void read_vec(const double *vec)
+    void read_vec(const float *vec)
     {
         const int npack = nrow / 8;
         const int tail = nrow - npack * 8;
@@ -90,8 +88,7 @@ public:
         __m256 *data_ptr = vdata;
         __m256 *end_ptr = data_ptr + npack;
         for( ; data_ptr < end_ptr; vec += 8, data_ptr++)
-            *data_ptr = _mm256_setr_ps(float(vec[0]), float(vec[1]), float(vec[2]), float(vec[3]),
-                                       float(vec[4]), float(vec[5]), float(vec[6]), float(vec[7]));
+            *data_ptr = _mm256_loadu_ps(vec);
 
         if(tail != 0)
         {
@@ -104,7 +101,7 @@ public:
         free(rem);
     }
 
-    void mult_spvec(const Eigen::SparseVector<double> &spvec, double *res)
+    void mult_spvec(const Eigen::SparseVector<float> &spvec, float *res)
     {
         __m256 *v_ptr = vdata;
         for( ; v_ptr < mdata; v_ptr++)
@@ -117,12 +114,12 @@ public:
         int npack = nrowx / 8;
         int mainlen = npack * 8;
 
-        for(Eigen::SparseVector<double>::InnerIterator iter(spvec); iter; ++iter)
+        for(Eigen::SparseVector<float>::InnerIterator iter(spvec); iter; ++iter)
         {
             col_ptr = mdata + nrowx * iter.index();
             v_ptr = vdata;
             end_ptr = v_ptr + mainlen;
-            c = _mm256_set1_ps(float(iter.value()));
+            c = _mm256_set1_ps(iter.value());
             for( ; v_ptr < end_ptr; col_ptr += 8, v_ptr += 8)
             {
                 v_ptr[0] = _mm256_add_ps(v_ptr[0], _mm256_mul_ps(col_ptr[0], c));
@@ -142,25 +139,18 @@ public:
         npack = nrow / 8;
         mainlen = npack * 8;
 
-        float *resf, *r;
-        posix_memalign((void **)&resf, 32, nrow * sizeof(float));
-        r = resf;
-
-        for(int i = 0; i < npack; i++, resf += 8)
-            _mm256_store_ps(resf, vdata[i]);
+        for(int i = 0; i < npack; i++, res += 8)
+            _mm256_storeu_ps(res, vdata[i]);
         if(nrowx > npack)
         {
             float rem[8];
             _mm256_storeu_ps(rem, vdata[nrowx - 1]);
-            for(int i = 0; i < nrow - mainlen; i++, resf++)
-                *resf = rem[i];
+            for(int i = 0; i < nrow - mainlen; i++, res++)
+                *res = rem[i];
         }
-        std::copy(r, r + nrow, res);
-
-        free(r);
     }
 
-    void mult_vec(const Eigen::VectorXd &vec, double *res)
+    void mult_vec(const Eigen::VectorXf &vec, float *res)
     {
         __m256 *v_ptr = vdata;
         for( ; v_ptr < mdata; v_ptr++)
@@ -173,13 +163,13 @@ public:
         int npack = nrowx / 8;
         int mainlen = npack * 8;
 
-        const double *vec_ptr = vec.data();
+        const float *vec_ptr = vec.data();
         for(int i = 0; i < ncol; i++)
         {
             col_ptr = mdata + nrowx * i;
             v_ptr = vdata;
             end_ptr = v_ptr + mainlen;
-            c = _mm256_set1_ps(float(vec_ptr[i]));
+            c = _mm256_set1_ps(vec_ptr[i]);
             for( ; v_ptr < end_ptr; col_ptr += 8, v_ptr += 8)
             {
                 v_ptr[0] = _mm256_add_ps(v_ptr[0], _mm256_mul_ps(col_ptr[0], c));
@@ -199,22 +189,15 @@ public:
         npack = nrow / 8;
         mainlen = npack * 8;
 
-        float *resf, *r;
-        posix_memalign((void **)&resf, 32, nrow * sizeof(float));
-        r = resf;
-
-        for(int i = 0; i < npack; i++, resf += 8)
-            _mm256_store_ps(resf, vdata[i]);
+        for(int i = 0; i < npack; i++, res += 8)
+            _mm256_storeu_ps(res, vdata[i]);
         if(nrowx > npack)
         {
             float rem[8];
             _mm256_storeu_ps(rem, vdata[nrowx - 1]);
-            for(int i = 0; i < nrow - mainlen; i++, resf++)
-                *resf = rem[i];
+            for(int i = 0; i < nrow - mainlen; i++, res++)
+                *res = rem[i];
         }
-        std::copy(r, r + nrow, res);
-
-        free(r);
     }
 
     // http://stackoverflow.com/questions/13219146/how-to-sum-m256-horizontally
@@ -230,7 +213,7 @@ public:
         return _mm_cvtss_f32(x32);
     }
 
-    void trans_mult_vec(const Eigen::VectorXd &vec, double *res)
+    void trans_mult_vec(const Eigen::VectorXf &vec, float *res)
     {
         read_vec(vec.data());
 
@@ -265,7 +248,7 @@ public:
         }
     }
 
-    double ith_inner_product(const int i)
+    float ith_inner_product(const int i)
     {
         const int npack = nrowx / 8;
         const int mainlen = npack * 8;
