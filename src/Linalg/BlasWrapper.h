@@ -5,10 +5,15 @@
 
 namespace Linalg {
 
-typedef const Eigen::Ref<const Eigen::MatrixXd> ConstGenericMatrix;
-
 extern "C"
 {
+    // Level 1
+    double ddot_(const int *n, const double *dx, const int *incx,
+	             const double *dy, const int *incy);
+    void daxpy_(const int *n, const double *alpha,
+                const double *dx, const int *incx,
+                double *dy, const int *incy);
+    // Level 2
     void dgemv_(const char* transA, const int* m, const int* n,
                 const double* alpha, const double* A, const int* ldA,
                 const double* x, const int* incx,
@@ -17,6 +22,7 @@ extern "C"
             	const double *a, const int *lda,
             	const double *x, const int *incx,
             	const double *beta, double *y, const int *incy);
+    // Level 3
     void dgemm_(const char* transA, const char* transB, const int* m, const int* n, const int* k,
                 const double* alpha, const double* A, const int* ldA, const double* B, const int* ldB,
                 const double* beta, double* C, const int* ldC);
@@ -28,6 +34,20 @@ extern "C"
             	const int *m, const int *n, const double *alpha,
             	const double *a, const int *lda,
             	double *b, const int *ldb);
+}
+
+
+
+typedef Eigen::Ref<Eigen::MatrixXd>             GenericMatrix;
+typedef const Eigen::Ref<const Eigen::MatrixXd> ConstGenericMatrix;
+typedef Eigen::Ref<Eigen::VectorXd>             GenericVector;
+typedef const Eigen::Ref<const Eigen::VectorXd> ConstGenericVector;
+
+// Wrappers
+inline double inner_product(const double *x, const double *y, const int len)
+{
+    const int inc = 1;
+    return ddot_(&len, x, &inc, y, &inc);
 }
 
 inline void mat_vec_prod(Eigen::VectorXd &res, const Eigen::MatrixXd &X, const Eigen::VectorXd &v,
