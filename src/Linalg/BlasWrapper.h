@@ -8,11 +8,12 @@ namespace Linalg {
 extern "C"
 {
     // Level 1
-    double ddot_(const int *n, const double *dx, const int *incx,
-	             const double *dy, const int *incy);
     void daxpy_(const int *n, const double *alpha,
                 const double *dx, const int *incx,
                 double *dy, const int *incy);
+    void saxpy_(const int *n, const float *alpha,
+                const float *dx, const int *incx,
+                float *dy, const int *incy);
     // Level 2
     void dgemv_(const char* transA, const int* m, const int* n,
                 const double* alpha, const double* A, const int* ldA,
@@ -41,17 +42,27 @@ extern "C"
 
 
 
+// Wrappers for Level 1
+
+// y = y + alpha * x
+inline void vec_add(double *dy, const double alpha, const double *dx, const int n)
+{
+    const int inc = 1;
+    daxpy_(&n, &alpha, dx, &inc, dy, &inc);
+}
+inline void vec_add(float *dy, const float alpha, const float *dx, const int n)
+{
+    const int inc = 1;
+    saxpy_(&n, &alpha, dx, &inc, dy, &inc);
+}
+
+
+// Wrappers for Level 2 and 3
+
 typedef Eigen::Ref<Eigen::MatrixXd>             GenericMatrix;
 typedef const Eigen::Ref<const Eigen::MatrixXd> ConstGenericMatrix;
 typedef Eigen::Ref<Eigen::VectorXd>             GenericVector;
 typedef const Eigen::Ref<const Eigen::VectorXd> ConstGenericVector;
-
-// Wrappers
-inline double inner_product(const double *x, const double *y, const int len)
-{
-    const int inc = 1;
-    return ddot_(&len, x, &inc, y, &inc);
-}
 
 inline void mat_vec_prod(Eigen::VectorXd &res, const Eigen::MatrixXd &X, const Eigen::VectorXd &v,
                          const double &alpha = 1.0, const double &beta = 0.0)

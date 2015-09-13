@@ -2,6 +2,7 @@
 #define ADMMBASE_H
 
 #include <RcppEigen.h>
+#include "Linalg/BlasWrapper.h"
 
 // General problem setting
 //   minimize f(x) + g(z)
@@ -130,8 +131,7 @@ public:
         resid_primal = newr.norm();
 
         // dual_y.noalias() += rho * newr;
-        std::transform(newr.data(), newr.data() + dim_dual, newr.data(), std::bind2nd(std::multiplies<typename VecTypeY::RealScalar>(), typename VecTypeY::RealScalar(rho)));
-        std::transform(dual_y.data(), dual_y.data() + dim_dual, newr.data(), dual_y.data(), std::plus<typename VecTypeY::RealScalar>());
+        Linalg::vec_add(dual_y.data(), typename VecTypeY::RealScalar(rho), newr.data(), dim_dual);
     }
 
     bool converged()
