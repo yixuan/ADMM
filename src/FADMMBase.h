@@ -2,13 +2,6 @@
 #define FADMMBASE_H
 
 #include <RcppEigen.h>
-#include <iomanip>
-
-// #define ADMM_PROFILE 2
-
-#ifdef ADMM_PROFILE
-  #include <omp.h>  // for omp_get_wtime()
-#endif
 
 // General problem setting
 //   minimize f(x) + g(z)
@@ -80,17 +73,7 @@ protected:
     {
         VectorXd yres, ycopy = dual_y;
 
-        #if ADMM_PROFILE > 1
-        double t1, t2;
-        t1 = omp_get_wtime();
-        #endif
-
         At_mult(yres, ycopy);
-
-        #if ADMM_PROFILE > 1
-        t2 = omp_get_wtime();
-        Rcpp::Rcout << "matrix product in computing eps_dual: " << t2 - t1 << " secs\n";
-        #endif
 
         return yres.norm() * eps_rel + std::sqrt(double(dim_main)) * eps_abs;
     }
@@ -98,22 +81,12 @@ protected:
     // resid_dual = rho * A'B(auxz - oldz)
     virtual double compute_resid_dual()
     {
-        #if ADMM_PROFILE > 1
-        double t1, t2;
-        t1 = omp_get_wtime();
-        #endif
-
         VecTypeZ zdiff = aux_z - old_z;
         VectorXd tmp;
         B_mult(tmp, zdiff);
 
         VectorXd dual;
         At_mult(dual, tmp);
-
-        #if ADMM_PROFILE > 1
-        t2 = omp_get_wtime();
-        Rcpp::Rcout << "matrix product in computing resid_dual: " << t2 - t1 << " secs\n";
-        #endif
 
         return rho * dual.norm();
     }
@@ -158,18 +131,7 @@ public:
         update_rho();
 
         VecTypeX newx(dim_main);
-
-        #if ADMM_PROFILE > 1
-        double t1, t2;
-        t1 = omp_get_wtime();
-        #endif
-
         next_x(newx);
-
-        #if ADMM_PROFILE > 1
-        t2 = omp_get_wtime();
-        Rcpp::Rcout << "updating x: " << t2 - t1 << " secs\n";
-        #endif
 
         main_x.swap(newx);
     }
@@ -193,32 +155,6 @@ public:
         std::transform(adj_y.data(), adj_y.data() + dim_dual, newr.data(), dual_y.data(), std::plus<double>());
     }
 
-    void debug_info_header()
-    {
-        const char sep = ' ';
-        const int width = 15;
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << "eps_primal";
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << "resid_primal";
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << "eps_dual";
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << "resid_dual";
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << "resid_combn";
-        Rcpp::Rcout << std::left << std::setw(10) << std::setfill(sep) << "rho";
-        Rcpp::Rcout << "restarted" << std::endl;
-    }
-
-    void debug_info()
-    {
-        const char sep = ' ';
-        const int width = 15;
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << eps_primal;
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << resid_primal;
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << eps_dual;
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << resid_dual;
-        Rcpp::Rcout << std::left << std::setw(width) << std::setfill(sep) << adj_c;
-        Rcpp::Rcout << std::left << std::setw(10) << std::setfill(sep) << rho;
-        Rcpp::Rcout << (adj_a == 1.0) << std::endl;
-    }
-
     bool converged()
     {
         return (resid_primal < eps_primal) &&
@@ -229,42 +165,14 @@ public:
     {
         int i;
 
-        #if ADMM_PROFILE > 1
-        double tx = 0, tz = 0, ty = 0;
-        double t1, t2;
-        #endif
-
-        // debug_info_header();
-
         for(i = 0; i < maxit; i++)
         {
             old_z = aux_z;
             old_y = dual_y;
 
-            #if ADMM_PROFILE > 1
-            t1 = omp_get_wtime();
-            #endif
-
             update_x();
-
-            #if ADMM_PROFILE > 1
-            t2 = omp_get_wtime();
-            tx += (t2 - t1);
-            #endif
-
             update_z();
-
-            #if ADMM_PROFILE > 1
-            t1 = omp_get_wtime();
-            tz += (t1 - t2);
-            #endif
-
             update_y();
-
-            #if ADMM_PROFILE > 1
-            t2 = omp_get_wtime();
-            ty += (t2 - t1);
-            #endif
 
             if(converged())
                 break;
@@ -288,13 +196,6 @@ public:
                 adj_c = old_c / 0.999;
             }
         }
-
-        #if ADMM_PROFILE > 1
-        Rcpp::Rcout << "time - x: " << tx << " secs\n";
-        Rcpp::Rcout << "time - z: " << tz << " secs\n";
-        Rcpp::Rcout << "time - y: " << ty << " secs\n";
-        Rcpp::Rcout << "time - x + y + z: " << tx + ty + tz << " secs\n";
-        #endif
 
         return i + 1;
     }
