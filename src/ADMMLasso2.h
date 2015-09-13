@@ -46,9 +46,7 @@ protected:
     VectorXd cache_Ax;            // cache Ax
     VectorXd tmp;
 #ifdef __AVX__
-    __m256d *loaded_X;
-    int nrowx;
-    int ncolx;
+    vtrMatrixf vtrX;
 #endif
 
     // x -> Ax
@@ -97,14 +95,13 @@ protected:
         const int nnz = res.nonZeros();
 
 #ifdef __AVX__
-        int lenx;
-        __m256d *loaded_tmp = load_vec_avx(tmp.data(), dim_dual, lenx);
+        vtrX.read_vec(tmp.data());
 #endif
         #pragma omp parallel for
         for(int i = 0; i < nnz; i++)
         {
 #ifdef __AVX__
-            const double val = val_ptr[i] - loaded_inner_product_avx(loaded_tmp, loaded_X + ind_ptr[i] * nrowx, lenx);
+            const double val = val_ptr[i] - vtrX.ith_inner_product(ind_ptr[i]);
 #else
             const double val = val_ptr[i] - tmp.dot(datX.col(ind_ptr[i]));
 #endif
@@ -117,10 +114,6 @@ protected:
                 val_ptr[i] = 0.0;
         }
 
-#ifdef __AVX__
-        free(loaded_tmp);
-#endif
-
         res.prune(0.0);
     }
 
@@ -132,7 +125,7 @@ protected:
             tmp.noalias() = cache_Ax + aux_z + dual_y / rho;
             VectorXd vec(dim_main);
 #ifdef __AVX__
-            mat_vec_tprod_avx(vec, datX, tmp);
+            vtrX.trans_mult_vec(tmp, vec.data());
             vec *= (-1.0 / gamma);
 #else
             vec.noalias() = -datX.transpose() * tmp / gamma;
@@ -147,7 +140,7 @@ protected:
     virtual void next_z(VectorXd &res)
     {
 #ifdef __AVX__
-        loaded_mat_spvec_prod_avx(cache_Ax.data(), dim_dual, loaded_X, nrowx, ncolx, main_x);
+        vtrX.mult_spvec(main_x, cache_Ax.data());
 #else
         cache_Ax.noalias() = datX * main_x;
 #endif
@@ -185,6 +178,10 @@ public:
         datX(datX_.data(), datX_.rows(), datX_.cols()),
         datY(datY_.data(), datY_.size()),
         cache_Ax(dim_dual), tmp(dim_dual)
+#ifdef __AVX__
+        ,
+        vtrX(datX)
+#endif
     {
         lambda0 = (datX.transpose() * datY).array().abs().maxCoeff();
 
@@ -197,18 +194,6 @@ public:
         eigs.compute(10, 0.1);
         VectorXd evals = eigs.ritzvalues();
         sprad = evals[0];
-
-#ifdef __AVX__
-        ncolx = datX.cols();
-        loaded_X = load_mat_avx(datX.data(), datX.rows(), datX.cols(), nrowx);
-#endif
-    }
-
-    virtual ~ADMMLasso()
-    {
-#ifdef __AVX__
-        free(loaded_X);
-#endif
     }
 
     double get_lambda_zero() { return lambda0; }
