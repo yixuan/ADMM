@@ -2,6 +2,7 @@
 #define FADMMBASE_H
 
 #include <RcppEigen.h>
+#include "Linalg/BlasWrapper.h"
 
 // General problem setting
 //   minimize f(x) + g(z)
@@ -13,6 +14,8 @@ template<typename VecTypeX, typename VecTypeZ, typename VecTypeY>
 class FADMMBase
 {
 protected:
+    typedef typename VecTypeY::RealScalar Yscalar;
+
     const int dim_main;   // dimension of x
     const int dim_aux;    // dimension of z
     const int dim_dual;   // dimension of Ax + Bz - c
@@ -118,7 +121,9 @@ public:
               double eps_abs_ = 1e-6, double eps_rel_ = 1e-6) :
         dim_main(n_), dim_aux(m_), dim_dual(p_),
         main_x(n_), aux_z(m_), dual_y(p_),  // allocate space but do not set values
-        adj_z(m_), adj_y(p_), adj_a(1.0), adj_c(9999),
+        adj_z(m_), adj_y(p_),
+        old_z(m_), old_y(p_),
+        adj_a(1.0), adj_c(9999),
         eps_abs(eps_abs_), eps_rel(eps_rel_)
     {}
 
@@ -149,8 +154,8 @@ public:
         resid_primal = newr.norm();
 
         // dual_y.noalias() = adj_y + rho * newr;
-        std::transform(newr.data(), newr.data() + dim_dual, newr.data(), std::bind2nd(std::multiplies<double>(), rho));
-        std::transform(adj_y.data(), adj_y.data() + dim_dual, newr.data(), dual_y.data(), std::plus<double>());
+        std::copy(adj_y.data(), adj_y.data() + dim_dual, dual_y.data());
+        Linalg::vec_add(dual_y.data(), Yscalar(rho), newr.data(), dim_dual);
     }
 
     bool converged()
@@ -166,7 +171,8 @@ public:
         for(i = 0; i < maxit; i++)
         {
             old_z = aux_z;
-            old_y = dual_y;
+            // old_y = dual_y;
+            std::copy(dual_y.data(), dual_y.data() + dim_dual, old_y.data());
 
             update_x();
             update_z();
@@ -186,11 +192,12 @@ public:
                 adj_a = 0.5 + 0.5 * std::sqrt(1 + 4.0 * old_a * old_a);
                 double ratio = (old_a - 1.0) / adj_a;
                 adj_z = (1 + ratio) * aux_z - ratio * old_z;
-                adj_y = (1 + ratio) * dual_y - ratio * old_y;
+                adj_y.noalias() = (1 + ratio) * dual_y - ratio * old_y;
             } else {
                 adj_a = 1.0;
                 adj_z = old_z;
-                adj_y = old_y;
+                // adj_y = old_y;
+                std::copy(old_y.data(), old_y.data() + dim_dual, adj_y.data());
                 adj_c = old_c / 0.999;
             }
         }
