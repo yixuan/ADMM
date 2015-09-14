@@ -18,48 +18,48 @@
 // b => y
 // f(x) => 1/2 * ||Ax - b||^2
 // g(z) => lambda * ||z||_1
-class ADMMLasso: public FADMMBase< Eigen::VectorXd, Eigen::SparseVector<double> >
+class ADMMLasso: public FADMMBase<Eigen::VectorXf, Eigen::SparseVector<float>, Eigen::VectorXf>
 {
 protected:
-    typedef Eigen::MatrixXd MatrixXd;
-    typedef Eigen::VectorXd VectorXd;
-    typedef Eigen::ArrayXd ArrayXd;
-    typedef Eigen::Map<const MatrixXd> MapMat;
-    typedef Eigen::Map<const VectorXd> MapVec;
-    typedef const Eigen::Ref<const MatrixXd> ConstGenericMatrix;
-    typedef const Eigen::Ref<const VectorXd> ConstGenericVector;
-    typedef Eigen::SparseVector<double> SparseVector;
-    typedef Eigen::LLT<MatrixXd> LLT;
+    typedef float Scalar;
+    typedef Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> Matrix;
+    typedef Eigen::Matrix<Scalar, Eigen::Dynamic, 1> Vector;
+    typedef Eigen::Map<const Matrix> MapMat;
+    typedef Eigen::Map<const Vector> MapVec;
+    typedef const Eigen::Ref<const Eigen::MatrixXd> ConstGenericMatrix;
+    typedef const Eigen::Ref<const Eigen::VectorXd> ConstGenericVector;
+    typedef Eigen::SparseVector<Scalar> SparseVector;
+    typedef Eigen::LLT<Matrix> LLT;
 
-    const MapMat datX;            // pointer to data matrix
-    const MapVec datY;            // pointer response vector
-    const VectorXd XY;            // X'Y
+    Matrix datX;                  // data matrix
+    Vector datY;                  // response vector
+    Vector XY;                    // X'Y
     const bool X_is_thin;         // whether nrow(X) > ncol(X)
     LLT solver;                   // matrix factorization
 
-    double lambda;                // L1 penalty
-    double lambda0;               // minimum lambda to make coefficients all zero
+    Scalar lambda;                // L1 penalty
+    Scalar lambda0;               // minimum lambda to make coefficients all zero
 
 
 
     // x -> Ax
-    void A_mult (VectorXd &res, VectorXd &x)  { res.swap(x); }
+    void A_mult (Vector &res, Vector &x)  { res.swap(x); }
     // y -> A'y
-    void At_mult(VectorXd &res, VectorXd &y)  { res.swap(y); }
+    void At_mult(Vector &res, Vector &y)  { res.swap(y); }
     // z -> Bz
-    void B_mult (VectorXd &res, SparseVector &z) { res = -z; }
+    void B_mult (Vector &res, SparseVector &z) { res = -z; }
     // ||c||_2
     double c_norm() { return 0.0; }
 
 
 
-    static void soft_threshold(SparseVector &res, const VectorXd &vec, const double &penalty)
+    static void soft_threshold(SparseVector &res, const Vector &vec, const double &penalty)
     {
         int v_size = vec.size();
         res.setZero();
         res.reserve(v_size);
 
-        const double *ptr = vec.data();
+        const Scalar *ptr = vec.data();
         for(int i = 0; i < v_size; i++)
         {
             if(ptr[i] > penalty)
@@ -68,9 +68,9 @@ protected:
                 res.insertBack(i) = ptr[i] + penalty;
         }
     }
-    void next_x(VectorXd &res)
+    void next_x(Vector &res)
     {
-        VectorXd rhs = XY - adj_y;
+        Vector rhs = XY - adj_y;
         // rhs += rho * adj_z;
 
         if(X_is_thin)
@@ -79,22 +79,22 @@ protected:
                 rhs[iter.index()] += rho * iter.value();
             res.noalias() = solver.solve(rhs);
         } else {
-            //res.noalias() = rhs - datX.transpose() * solver.solve(datX * rhs);
-            //res /= rho;
-            VectorXd Ax = datX * adj_z;
+            res.noalias() = rhs - datX.transpose() * solver.solve(datX * rhs);
+            res /= rho;
+            /*VectorXd Ax = datX * adj_z;
             res.noalias() = rhs - datX.transpose() * Ax;
             const double c1 = res.squaredNorm();
             const double c2 = (datX * res).squaredNorm();
             res *= (c1 / (c2 + rho * c1));
-            res += adj_z;
+            res += adj_z;*/
         }
     }
     virtual void next_z(SparseVector &res)
     {
-        VectorXd vec = main_x + adj_y / rho;
+        Vector vec = main_x + adj_y / rho;
         soft_threshold(res, vec, lambda / rho);
     }
-    void next_residual(VectorXd &res)
+    void next_residual(Vector &res)
     {
         // res = main_x;
         // res -= aux_z;
@@ -112,16 +112,16 @@ protected:
     static double diff_squared_norm(const SparseVector &v1, const SparseVector &v2)
     {
         const int n1 = v1.nonZeros(), n2 = v2.nonZeros();
-        const double *v1_val = v1.valuePtr(), *v2_val = v2.valuePtr();
+        const Scalar *v1_val = v1.valuePtr(), *v2_val = v2.valuePtr();
         const int *v1_ind = v1.innerIndexPtr(), *v2_ind = v2.innerIndexPtr();
 
-        double r = 0.0;
+        Scalar r = 0.0;
         int i1 = 0, i2 = 0;
         while(i1 < n1 && i2 < n2)
         {
             if(v1_ind[i1] == v2_ind[i2])
             {
-                double val = v1_val[i1] - v2_val[i2];
+                Scalar val = v1_val[i1] - v2_val[i2];
                 r += val * val;
                 i1++;
                 i2++;
@@ -175,12 +175,16 @@ public:
               double eps_rel_ = 1e-6) :
         FADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
                   eps_abs_, eps_rel_),
-        datX(datX_.data(), datX_.rows(), datX_.cols()),
-        datY(datY_.data(), datY_.size()),
-        XY(datX.transpose() * datY),
-        X_is_thin(datX.rows() > datX.cols()),
-        lambda0(XY.array().abs().maxCoeff())
-    {}
+        datX(datX_.rows(), datX_.cols()),
+        datY(datY_.size()),
+        XY(datX_.cols()),
+        X_is_thin(datX.rows() > datX.cols())
+    {
+        std::copy(datX_.data(), datX_.data() + datX_.size(), datX.data());
+        std::copy(datY_.data(), datY_.data() + datY_.size(), datY.data());
+        XY.noalias() = datX.transpose() * datY;
+        lambda0 = XY.cwiseAbs().maxCoeff();
+    }
 
     double get_lambda_zero() { return lambda0; }
 
@@ -197,7 +201,7 @@ public:
         lambda = lambda_;
         rho = rho_;
 
-        MatrixXd XX;
+        Matrix XX;
         if(X_is_thin)
             Linalg::cross_prod_lower(XX, datX);
         else
@@ -205,12 +209,12 @@ public:
 
         if(rho <= 0)
         {
-            MatOpSymLower<double> op(XX);
-            SymEigsSolver<double, LARGEST_ALGE> eigs(&op, 1, 3);
+            MatOpSymLower<Scalar> op(XX);
+            SymEigsSolver<Scalar, LARGEST_ALGE> eigs(&op, 1, 3);
             srand(0);
             eigs.init();
             eigs.compute(10, 0.1);
-            VectorXd evals = eigs.ritzvalues();
+            Vector evals = eigs.ritzvalues();
             rho = std::pow(evals[0], 1.0 / 3) * std::pow(lambda, 2.0 / 3);
         }
 
