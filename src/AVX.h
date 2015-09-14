@@ -277,6 +277,7 @@ public:
     }
 };
 
+// Calculating \sum x_i and \sum x_i^2
 inline void get_ss_avx(const double *x, const int len, double &sum, double &sum_of_square)
 {
     __m256d xx;
@@ -286,16 +287,21 @@ inline void get_ss_avx(const double *x, const int len, double &sum, double &sum_
     sum = 0.0;
     sum_of_square = 0.0;
 
+    const double *x_end = x + len;
+
     const char rem = (unsigned long)x % 32;
     const char head = rem ? (32 - rem) / sizeof(double) : 0;
-    for(int i = 0; i < head; i++, x++)
+
+    const double *xfor = x + head;
+    for( ; x < xfor; x++)
     {
         sum += *x;
         sum_of_square += (*x) * (*x);
     }
 
     const int npack = (len - head) / 8;
-    for(int i = 0; i < npack; i++, x += 8)
+    xfor = x + 8 * npack;
+    for( ; x < xfor; x += 8)
     {
         xx = _mm256_load_pd(x);
         s = _mm256_add_pd(s, xx);
@@ -305,12 +311,15 @@ inline void get_ss_avx(const double *x, const int len, double &sum, double &sum_
         s = _mm256_add_pd(s, xx);
         ss = _mm256_add_pd(ss, _mm256_mul_pd(xx, xx));
     }
-    double *resp = (double *) &s;
-    sum += resp[0] + resp[1] + resp[2] + resp[3];
-    resp = (double *) &ss;
-    sum_of_square += resp[0] + resp[1] + resp[2] + resp[3];
+    s = _mm256_hadd_pd(s, s);
+    ss = _mm256_hadd_pd(ss, ss);
 
-    for(int i = head + 8 * npack; i < len; i++, x++)
+    double *resp = (double *) &s;
+    sum += resp[0] + resp[2];
+    resp = (double *) &ss;
+    sum_of_square += resp[0] + resp[2];
+
+    for( ; x < x_end; x++)
     {
         sum += *x;
         sum_of_square += (*x) * (*x);
@@ -324,13 +333,18 @@ inline void standardize_vec_avx(double *x, const int len, const double center, c
     __m256d cc = _mm256_set1_pd(center);
     __m256d ss = _mm256_set1_pd(scale);
 
+    const double *x_end = x + len;
+
     const char rem = (unsigned long)x % 32;
     const char head = rem ? (32 - rem) / sizeof(double) : 0;
-    for(int i = 0; i < head; i++, x++)
+
+    const double *xfor = x + head;
+    for( ; x < xfor; x++)
         *x = (*x - center) * scale;
 
     const int npack = (len - head) / 8;
-    for(int i = 0; i < npack; i++, x += 8)
+    xfor = x + 8 * npack;
+    for( ; x < xfor; x += 8)
     {
         xx = _mm256_load_pd(x);
         xx = _mm256_mul_pd(_mm256_sub_pd(xx, cc), ss);
@@ -341,7 +355,7 @@ inline void standardize_vec_avx(double *x, const int len, const double center, c
         _mm256_store_pd(x + 4, xx);
     }
 
-    for(int i = head + 8 * npack; i < len; i++, x++)
+    for( ; x < x_end; x++)
         *x = (*x - center) * scale;
 }
 
