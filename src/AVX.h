@@ -277,8 +277,14 @@ public:
     }
 };
 
+
+
 // Calculating \sum x_i and \sum x_i^2
-inline void get_ss_avx(const double *x, const int len, double &sum, double &sum_of_square)
+template <typename T>
+inline void get_ss_avx(const T *x, const int len, T &sum, T&sum_of_square) {}
+
+template <>
+inline void get_ss_avx<double>(const double *x, const int len, double &sum, double &sum_of_square)
 {
     __m256d xx;
     __m256d s = _mm256_setzero_pd();
@@ -326,8 +332,58 @@ inline void get_ss_avx(const double *x, const int len, double &sum, double &sum_
     }
 }
 
-// (x - center) * scale
-inline void standardize_vec_avx(double *x, const int len, const double center, const double scale)
+template <>
+inline void get_ss_avx<float>(const float *x, const int len, float &sum, float &sum_of_square)
+{
+    __m256 xx;
+    __m256 s = _mm256_setzero_ps();
+    __m256 ss = _mm256_setzero_ps();
+
+    sum = 0.0;
+    sum_of_square = 0.0;
+
+    const float *x_end = x + len;
+
+    const char rem = (unsigned long)x % 32;
+    const char head = rem ? (32 - rem) / sizeof(float) : 0;
+
+    const float *xfor = x + head;
+    for( ; x < xfor; x++)
+    {
+        sum += *x;
+        sum_of_square += (*x) * (*x);
+    }
+
+    const int npack = (len - head) / 16;
+    xfor = x + 16 * npack;
+    for( ; x < xfor; x += 16)
+    {
+        xx = _mm256_load_ps(x);
+        s = _mm256_add_ps(s, xx);
+        ss = _mm256_add_ps(ss, _mm256_mul_ps(xx, xx));
+
+        xx = _mm256_load_ps(x + 8);
+        s = _mm256_add_ps(s, xx);
+        ss = _mm256_add_ps(ss, _mm256_mul_ps(xx, xx));
+    }
+    sum += vtrMatrixf::_mm256_reduce_add_ps(s);
+    sum_of_square += vtrMatrixf::_mm256_reduce_add_ps(ss);
+
+    for( ; x < x_end; x++)
+    {
+        sum += *x;
+        sum_of_square += (*x) * (*x);
+    }
+}
+
+
+
+// x = > (x - center) * scale
+template <typename T>
+inline void standardize_vec_avx(T *x, const int len, const T center, const T scale) {}
+
+template <>
+inline void standardize_vec_avx<double>(double *x, const int len, const double center, const double scale)
 {
     __m256d xx;
     __m256d cc = _mm256_set1_pd(center);
@@ -358,6 +414,41 @@ inline void standardize_vec_avx(double *x, const int len, const double center, c
     for( ; x < x_end; x++)
         *x = (*x - center) * scale;
 }
+
+template <>
+inline void standardize_vec_avx<float>(float *x, const int len, const float center, const float scale)
+{
+    __m256 xx;
+    __m256 cc = _mm256_set1_ps(center);
+    __m256 ss = _mm256_set1_ps(scale);
+
+    const float *x_end = x + len;
+
+    const char rem = (unsigned long)x % 32;
+    const char head = rem ? (32 - rem) / sizeof(float) : 0;
+
+    const float *xfor = x + head;
+    for( ; x < xfor; x++)
+        *x = (*x - center) * scale;
+
+    const int npack = (len - head) / 16;
+    xfor = x + 16 * npack;
+    for( ; x < xfor; x += 16)
+    {
+        xx = _mm256_load_ps(x);
+        xx = _mm256_mul_ps(_mm256_sub_ps(xx, cc), ss);
+        _mm256_store_ps(x, xx);
+
+        xx = _mm256_load_ps(x + 8);
+        xx = _mm256_mul_ps(_mm256_sub_ps(xx, cc), ss);
+        _mm256_store_ps(x + 8, xx);
+    }
+
+    for( ; x < x_end; x++)
+        *x = (*x - center) * scale;
+}
+
+
 
 inline double inner_product_avx(const double *x, const double *y, const int len)
 {
