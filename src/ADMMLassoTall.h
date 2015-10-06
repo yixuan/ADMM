@@ -1,5 +1,5 @@
-#ifndef ADMMLASSO_H
-#define ADMMLASSO_H
+#ifndef ADMMLASSOTALL_H
+#define ADMMLASSOTALL_H
 
 #include "FADMMBase.h"
 #include "Linalg/BlasWrapper.h"
@@ -18,7 +18,7 @@
 // b => y
 // f(x) => 1/2 * ||Ax - b||^2
 // g(z) => lambda * ||z||_1
-class ADMMLasso: public FADMMBase<Eigen::VectorXf, Eigen::SparseVector<float>, Eigen::VectorXf>
+class ADMMLassoTall: public FADMMBase<Eigen::VectorXf, Eigen::SparseVector<float>, Eigen::VectorXf>
 {
 protected:
     typedef float Scalar;
@@ -34,7 +34,6 @@ protected:
     Matrix datX;                  // data matrix
     Vector datY;                  // response vector
     Vector XY;                    // X'Y
-    const bool X_is_thin;         // whether nrow(X) > ncol(X)
     LLT solver;                   // matrix factorization
 
     Scalar lambda;                // L1 penalty
@@ -73,21 +72,11 @@ protected:
         Vector rhs = XY - adj_y;
         // rhs += rho * adj_z;
 
-        if(X_is_thin)
-        {
-            for(SparseVector::InnerIterator iter(adj_z); iter; ++iter)
-                rhs[iter.index()] += rho * iter.value();
-            res.noalias() = solver.solve(rhs);
-        } else {
-            res.noalias() = rhs - datX.transpose() * solver.solve(datX * rhs);
-            res /= rho;
-            /*VectorXd Ax = datX * adj_z;
-            res.noalias() = rhs - datX.transpose() * Ax;
-            const double c1 = res.squaredNorm();
-            const double c2 = (datX * res).squaredNorm();
-            res *= (c1 / (c2 + rho * c1));
-            res += adj_z;*/
-        }
+        // manual optimization
+        for(SparseVector::InnerIterator iter(adj_z); iter; ++iter)
+            rhs[iter.index()] += rho * iter.value();
+
+        res.noalias() = solver.solve(rhs);
     }
     virtual void next_z(SparseVector &res)
     {
@@ -166,19 +155,19 @@ protected:
         // SparseVector tmp = aux_z - adj_z;
         // return rho * resid_primal * resid_primal + rho * tmp.squaredNorm();
 
+        // manual optmization
         return rho * resid_primal * resid_primal + rho * diff_squared_norm(aux_z, adj_z);
     }
 
 public:
-    ADMMLasso(ConstGenericMatrix &datX_, ConstGenericVector &datY_,
-              double eps_abs_ = 1e-6,
-              double eps_rel_ = 1e-6) :
+    ADMMLassoTall(ConstGenericMatrix &datX_, ConstGenericVector &datY_,
+                  double eps_abs_ = 1e-6,
+                  double eps_rel_ = 1e-6) :
         FADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
                   eps_abs_, eps_rel_),
         datX(datX_.rows(), datX_.cols()),
         datY(datY_.size()),
-        XY(datX_.cols()),
-        X_is_thin(datX.rows() > datX.cols())
+        XY(datX_.cols())
     {
         std::copy(datX_.data(), datX_.data() + datX_.size(), datX.data());
         std::copy(datY_.data(), datY_.data() + datY_.size(), datY.data());
@@ -202,10 +191,7 @@ public:
         rho = rho_;
 
         Matrix XX;
-        if(X_is_thin)
-            Linalg::cross_prod_lower(XX, datX);
-        else
-            Linalg::tcross_prod_lower(XX, datX);
+        Linalg::cross_prod_lower(XX, datX);
 
         if(rho <= 0)
         {
@@ -249,4 +235,4 @@ public:
 
 
 
-#endif // ADMMLASSO_H
+#endif // ADMMLASSOTALL_H
