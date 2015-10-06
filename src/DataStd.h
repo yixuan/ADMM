@@ -41,7 +41,7 @@ private:
 #ifdef __AVX__
         Scalar s, ss;
         const int vsize = v.size();
-        get_ss_avx(v.data(), v.size(), s, ss);
+        get_ss_avx<Scalar>(v.data(), v.size(), s, ss);
         s /= vsize;
         return std::sqrt(ss / vsize - s * s);
 #else
@@ -62,7 +62,7 @@ private:
     }
 
     // inner product of spvec and arr
-    static Scalar inner_product(SparseVector &spvec, Array &arr)
+    static Scalar sparse_inner_product(SparseVector &spvec, Array &arr)
     {
         Scalar res = 0.0;
         for(typename SparseVector::InnerIterator iter(spvec); iter; ++iter)
@@ -135,10 +135,10 @@ public:
     #ifdef __AVX__
                     Scalar *begin = &X(0, i);
                     Scalar s, ss;
-                    get_ss_avx(begin, n, s, ss);
+                    get_ss_avx<Scalar>(begin, n, s, ss);
                     meanX[i] = s / n;
                     scaleX[i] = std::sqrt(ss - s * s / n) * n_invsqrt;
-                    standardize_vec_avx(begin, n, meanX[i], 1.0 / scaleX[i]);
+                    standardize_vec_avx<Scalar>(begin, n, meanX[i], 1.0 / scaleX[i]);
     #else
                     Scalar *begin = &X(0, i);
                     Scalar *end = begin + n;
@@ -194,12 +194,12 @@ public:
                 break;
             case 2:
                 coef *= scaleY;
-                beta0 = meanY - inner_product(coef, meanX);
+                beta0 = meanY - sparse_inner_product(coef, meanX);
                 break;
             case 3:
                 elementwise_quot(coef, scaleX);
                 coef *= scaleY;
-                beta0 = meanY - inner_product(coef, meanX);
+                beta0 = meanY - sparse_inner_product(coef, meanX);
                 break;
             default:
                 break;
