@@ -26,13 +26,13 @@ protected:
     typedef Eigen::Matrix<Scalar, Eigen::Dynamic, 1> Vector;
     typedef Eigen::Map<const Matrix> MapMat;
     typedef Eigen::Map<const Vector> MapVec;
-    typedef const Eigen::Ref<const Eigen::MatrixXd> ConstGenericMatrix;
-    typedef const Eigen::Ref<const Eigen::VectorXd> ConstGenericVector;
+    typedef const Eigen::Ref<const Matrix> ConstGenericMatrix;
+    typedef const Eigen::Ref<const Vector> ConstGenericVector;
     typedef Eigen::SparseVector<Scalar> SparseVector;
     typedef Eigen::LLT<Matrix> LLT;
 
-    Matrix datX;                  // data matrix
-    Vector datY;                  // response vector
+    MapMat datX;                  // data matrix
+    MapVec datY;                  // response vector
     Vector XY;                    // X'Y
     LLT solver;                   // matrix factorization
 
@@ -165,17 +165,13 @@ public:
                   double eps_rel_ = 1e-6) :
         FADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
                   eps_abs_, eps_rel_),
-        datX(datX_.rows(), datX_.cols()),
-        datY(datY_.size()),
-        XY(datX_.cols())
-    {
-        std::copy(datX_.data(), datX_.data() + datX_.size(), datX.data());
-        std::copy(datY_.data(), datY_.data() + datY_.size(), datY.data());
-        XY.noalias() = datX.transpose() * datY;
-        lambda0 = XY.cwiseAbs().maxCoeff();
-    }
+        datX(datX_.data(), datX_.rows(), datX_.cols()),
+        datY(datY_.data(), datY_.size()),
+        XY(datX.transpose() * datY),
+        lambda0(XY.cwiseAbs().maxCoeff())
+    {}
 
-    double get_lambda_zero() { return lambda0; }
+    double get_lambda_zero() const { return lambda0; }
 
     // init() is a cold start for the first lambda
     void init(double lambda_, double rho_)
