@@ -1,5 +1,5 @@
-#ifndef ADMMLASSO_H
-#define ADMMLASSO_H
+#ifndef ADMMLASSOWIDE_H
+#define ADMMLASSOWIDE_H
 
 #include "ADMMBase.h"
 #include "Linalg/BlasWrapper.h"
@@ -23,7 +23,7 @@
 // c => 0
 // f(x) => lambda * ||x||_1
 // g(z) => 1/2 * ||z + b||^2
-class ADMMLasso: public ADMMBase<Eigen::SparseVector<float>, Eigen::VectorXf, Eigen::VectorXf>
+class ADMMLassoWide: public ADMMBase<Eigen::SparseVector<float>, Eigen::VectorXf, Eigen::VectorXf>
 {
 protected:
     typedef float Scalar;
@@ -31,12 +31,12 @@ protected:
     typedef Eigen::Matrix<Scalar, Eigen::Dynamic, 1> Vector;
     typedef Eigen::Map<const Matrix> MapMat;
     typedef Eigen::Map<const Vector> MapVec;
-    typedef const Eigen::Ref<const Eigen::MatrixXd> ConstGenericMatrix;
-    typedef const Eigen::Ref<const Eigen::VectorXd> ConstGenericVector;
+    typedef const Eigen::Ref<const Matrix> ConstGenericMatrix;
+    typedef const Eigen::Ref<const Vector> ConstGenericVector;
     typedef Eigen::SparseVector<Scalar> SparseVector;
 
-    Matrix datX;                  // data matrix
-    Vector datY;                  // response vector
+    MapMat datX;                  // data matrix
+    MapVec datY;                  // response vector
     Scalar sprad;                 // spectral radius of X'X
     Scalar lambda;                // L1 penalty
     Scalar lambda0;               // minimum lambda to make coefficients all zero
@@ -180,20 +180,16 @@ protected:
     }
 
 public:
-    ADMMLasso(ConstGenericMatrix &datX_, ConstGenericVector &datY_,
-              double eps_abs_ = 1e-6,
-              double eps_rel_ = 1e-6) :
+    ADMMLassoWide(ConstGenericMatrix &datX_, ConstGenericVector &datY_,
+                  double eps_abs_ = 1e-6,
+                  double eps_rel_ = 1e-6) :
         ADMMBase(datX_.cols(), datX_.rows(), datX_.rows(),
                  eps_abs_, eps_rel_),
-        datX(dim_dual, dim_main),
-        datY(dim_dual),
+        datX(datX_.data(), datX_.rows(), datX_.cols()),
+        datY(datY_.data(), datY_.size()),
+        lambda0((datX.transpose() * datY).cwiseAbs().maxCoeff()),
         cache_Ax(dim_dual), tmp(dim_dual)
     {
-        // datX_ and datY_ are double, datX and datY are float
-        std::copy(datX_.data(), datX_.data() + dim_dual * dim_main, datX.data());
-        std::copy(datY_.data(), datY_.data() + dim_dual, datY.data());
-        lambda0 = (datX.transpose() * datY).cwiseAbs().maxCoeff();
-
         Matrix XX;
         Linalg::tcross_prod_lower(XX, datX);
         MatOpSymLower<Scalar> op(XX);
@@ -209,7 +205,7 @@ public:
 #endif
     }
 
-    double get_lambda_zero() { return lambda0; }
+    double get_lambda_zero() const { return lambda0; }
 
     // init() is a cold start for the first lambda
     void init(double lambda_, double rho_)
@@ -248,4 +244,4 @@ public:
 
 
 
-#endif // ADMMLASSO_H
+#endif // ADMMLASSOWIDE_H
