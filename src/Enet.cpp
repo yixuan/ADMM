@@ -67,12 +67,21 @@ BEGIN_RCPP
     DataStd<float> datstd(n, p, standardize, intercept);
     datstd.standardize(datX, datY);
 
-    ADMMEnetTall *solver_tall = new ADMMEnetTall(datX, datY, alpha, eps_abs, eps_rel);
+    ADMMEnetTall *solver_tall;
+    ADMMEnetWide *solver_wide;
+
+    if(n > p)
+        solver_tall = new ADMMEnetTall(datX, datY, alpha, eps_abs, eps_rel);
+    else
+        solver_wide = new ADMMEnetWide(datX, datY, alpha, eps_abs, eps_rel);
 
     if(nlambda < 1)
     {
         double lmax = 0.0;
-        lmax = solver_tall->get_lambda_zero() / n * datstd.get_scaleY();
+        if(n > p)
+            lmax = solver_tall->get_lambda_zero() / n * datstd.get_scaleY();
+        else
+            lmax = solver_wide->get_lambda_zero() / n * datstd.get_scaleY();
         double lmin = as<double>(lmin_ratio_) * lmax;
         lambda.setLinSpaced(as<int>(nlambda_), std::log(lmax), std::log(lmin));
         lambda = lambda.exp();
@@ -88,19 +97,36 @@ BEGIN_RCPP
     for(int i = 0; i < nlambda; i++)
     {
         ilambda = lambda[i] * n / datstd.get_scaleY();
-        if(i == 0)
-            solver_tall->init(ilambda, rho);
-        else
-            solver_tall->init_warm(ilambda);
+        if(n > p)
+        {
+            if(i == 0)
+                solver_tall->init(ilambda, rho);
+            else
+                solver_tall->init_warm(ilambda);
 
-        niter[i] = solver_tall->solve(maxit);
-        SpVec res = solver_tall->get_z();
-        float beta0 = 0.0;
-        datstd.recover(beta0, res);
-        write_beta_matrix(beta, i, beta0, res);
+            niter[i] = solver_tall->solve(maxit);
+            SpVec res = solver_tall->get_z();
+            float beta0 = 0.0;
+            datstd.recover(beta0, res);
+            write_beta_matrix(beta, i, beta0, res);
+        } else {
+            if(i == 0)
+                solver_wide->init(ilambda, rho);
+            else
+                solver_wide->init_warm(ilambda);
+
+            niter[i] = solver_wide->solve(maxit);
+            SpVec res = solver_wide->get_x();
+            float beta0 = 0.0;
+            datstd.recover(beta0, res);
+            write_beta_matrix(beta, i, beta0, res);
+        }
     }
 
-    delete solver_tall;
+    if(n > p)
+        delete solver_tall;
+    else
+        delete solver_wide;
 
     beta.makeCompressed();
 
