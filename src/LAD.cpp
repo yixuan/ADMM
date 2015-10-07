@@ -31,7 +31,7 @@ BEGIN_RCPP
 
     bool intercept = as<bool>(intercept_);
 
-    DataStd datstd(n, p, true, intercept);
+    DataStd<double> datstd(n, p, true, intercept);
     datstd.standardize(datX, datY);
 
     ADMMLAD solver(datX, datY, rho, eps_abs, eps_rel);

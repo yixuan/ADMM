@@ -15,7 +15,7 @@
 //
 // f(x) => indicator function of Ax = b
 // g(z) => ||z||_1
-class ADMMBP: public FADMMBase< Eigen::VectorXd, Eigen::SparseVector<double> >
+class ADMMBP: public FADMMBase< Eigen::VectorXd, Eigen::SparseVector<double>, Eigen::VectorXd >
 {
 private:
     typedef Eigen::MatrixXd MatrixXd;

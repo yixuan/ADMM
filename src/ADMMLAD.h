@@ -27,7 +27,7 @@
 // c  => y
 // f(x) => 0
 // g(z) => ||z||_1
-class ADMMLAD: public FADMMBase< Eigen::VectorXd, Eigen::SparseVector<double> >
+class ADMMLAD: public FADMMBase< Eigen::VectorXd, Eigen::SparseVector<double>, Eigen::VectorXd >
 {
 private:
     typedef Eigen::MatrixXd MatrixXd;
