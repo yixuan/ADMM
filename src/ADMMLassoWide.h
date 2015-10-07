@@ -39,7 +39,7 @@ protected:
     MapVec datY;                  // response vector
     Scalar sprad;                 // spectral radius of X'X
     Scalar lambda;                // L1 penalty
-    const Scalar lambda0;         // minimum lambda to make coefficients all zero
+    Scalar lambda0;               // minimum lambda to make coefficients all zero
 
     int iter_counter;             // which iteration are we in?
 
