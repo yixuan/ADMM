@@ -7,7 +7,7 @@
 #include "ADMMMatOp.h"
 
 #ifdef __AVX__
-#include "AVX.h"
+#include "Linalg/AVX.h"
 #endif
 
 // minimize  1/2 * ||y - X * beta||^2 + lambda * ||beta||_1

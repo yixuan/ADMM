@@ -4,7 +4,7 @@
 #include <Eigen/Core>
 
 #ifdef __AVX__
-#include "AVX.h"
+#include "Linalg/AVX.h"
 #endif
 
 template <typename Scalar = double>
