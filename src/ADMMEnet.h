@@ -31,9 +31,9 @@ private:
         const ADMMLassoTall::Scalar *ptr = vec.data();
         for(int i = 0; i < v_size; i++)
         {
-            if(ptr[i] > penalty)
+            if(ptr[i] > thresh)
                 res.insertBack(i) = (ptr[i] - thresh) / denom;
-            else if(ptr[i] < -penalty)
+            else if(ptr[i] < -thresh)
                 res.insertBack(i) = (ptr[i] + thresh) / denom;
         }
     }
@@ -44,11 +44,11 @@ private:
     }
 
 public:
-    ADMMLassoTall(ADMMLassoTall::ConstGenericMatrix &datX_,
-                  ADMMLassoTall::ConstGenericVector &datY_,
-                  double alpha_ = 1.0,
-                  double eps_abs_ = 1e-6,
-                  double eps_rel_ = 1e-6) :
+    ADMMEnetTall(ADMMLassoTall::ConstGenericMatrix &datX_,
+                 ADMMLassoTall::ConstGenericVector &datY_,
+                 double alpha_ = 1.0,
+                 double eps_abs_ = 1e-6,
+                 double eps_rel_ = 1e-6) :
         ADMMLassoTall(datX_, datY_, eps_abs_, eps_rel_),
         alpha(alpha_)
     {
