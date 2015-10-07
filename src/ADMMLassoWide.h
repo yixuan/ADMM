@@ -39,7 +39,7 @@ protected:
     MapVec datY;                  // response vector
     Scalar sprad;                 // spectral radius of X'X
     Scalar lambda;                // L1 penalty
-    Scalar lambda0;               // minimum lambda to make coefficients all zero
+    const Scalar lambda0;         // minimum lambda to make coefficients all zero
 
     int iter_counter;             // which iteration are we in?
 
@@ -128,8 +128,14 @@ protected:
 
     virtual void next_x(SparseVector &res)
     {
+        if(lambda > lambda0 - 1e-5)
+        {
+            res.setZero();
+            return;
+        }
+
         // iter_counter = 0, 3, 15, 63, .... (4^k - 1)
-        if(is_regular_update(iter_counter) && lambda < lambda0)
+        if(is_regular_update(iter_counter))
         {
             const Scalar gamma = sprad;
             tmp.noalias() = cache_Ax + aux_z + dual_y / Scalar(rho);
