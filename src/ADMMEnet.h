@@ -1,7 +1,7 @@
 #ifndef ADMMENET_H
 #define ADMMENET_H
 
-#include "ADMMLasso.h"
+#include "ADMMLassoTall.h"
 
 // minimize  1/2 * ||y - X * beta||^2 + lambda * enet(beta)
 //
@@ -15,47 +15,44 @@
 // b => y
 // f(x) => 1/2 * ||Ax - b||^2
 // g(z) => lambda * enet(z)
-class ADMMEnet: public ADMMLasso
+class ADMMEnetTall: public ADMMLassoTall
 {
 private:
-    typedef Eigen::MatrixXd MatrixXd;
-    typedef Eigen::VectorXd VectorXd;
-    typedef Eigen::ArrayXd ArrayXd;
-    typedef Eigen::SparseVector<double> SparseVector;
+    ADMMLassoTall::Scalar alpha;
 
-    double alpha;
-
-    void enet(SparseVector &res, VectorXd &vec, const double &penalty)
+    void enet(ADMMLassoTall::SparseVector &res, const ADMMLassoTall::Vector &vec, const double &penalty)
     {
+        int v_size = vec.size();
         res.setZero();
-        res.reserve(vec.size() / 2);
+        res.reserve(v_size);
 
-        double thresh = alpha * penalty;
-        double denom = 1.0 + penalty * (1.0 - alpha);
-        double *ptr = vec.data();
-        for(int i = 0; i < vec.size(); i++)
+        const ADMMLassoTall::Scalar thresh = alpha * penalty;
+        const ADMMLassoTall::Scalar denom = 1.0 + penalty * (1.0 - alpha);
+        const ADMMLassoTall::Scalar *ptr = vec.data();
+        for(int i = 0; i < v_size; i++)
         {
-            if(ptr[i] > thresh)
+            if(ptr[i] > penalty)
                 res.insertBack(i) = (ptr[i] - thresh) / denom;
-            else if(ptr[i] < -thresh)
+            else if(ptr[i] < -penalty)
                 res.insertBack(i) = (ptr[i] + thresh) / denom;
         }
     }
-    void next_z(SparseVector &res)
+    void next_z(ADMMLassoTall::SparseVector &res)
     {
-        VectorXd vec = main_x + adj_y / rho;
+        ADMMLassoTall::Vector vec = main_x + adj_y / rho;
         enet(res, vec, lambda / rho);
     }
 
 public:
-    ADMMEnet(const MatrixXd &datX_, const VectorXd &datY_,
-             double alpha_ = 1.0,
-             double eps_abs_ = 1e-6,
-             double eps_rel_ = 1e-6) :
-        ADMMLasso(datX_, datY_, eps_abs_, eps_rel_),
+    ADMMLassoTall(ADMMLassoTall::ConstGenericMatrix &datX_,
+                  ADMMLassoTall::ConstGenericVector &datY_,
+                  double alpha_ = 1.0,
+                  double eps_abs_ = 1e-6,
+                  double eps_rel_ = 1e-6) :
+        ADMMLassoTall(datX_, datY_, eps_abs_, eps_rel_),
         alpha(alpha_)
     {
-        lambda0 /= (alpha + 0.0001);
+        this->lambda0 /= (alpha + 0.0001);
     }
 };
 
