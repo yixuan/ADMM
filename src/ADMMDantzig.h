@@ -3,8 +3,8 @@
 
 #include "ADMMBase.h"
 #include "Linalg/BlasWrapper.h"
-#include "Eigs/SymEigsSolver.h"
-#include "Eigs/MatOpDense.h"
+#include "Spectra/SymEigsSolver.h"
+#include "ADMMMatOp.h"
 
 // minimize ||beta||_1
 // s.t. ||X'(X * beta - y)||_inf <= lambda
@@ -19,91 +19,73 @@
 // c => X'y
 // f(x) => ||x||_1
 // g(z) => 0, dom(z) = {z: ||z||_inf <= lambda}
-class ADMMDantzig: public ADMMBase<Eigen::SparseVector<double>, Eigen::VectorXd>
+class ADMMDantzig: public ADMMBase<Eigen::SparseVector<double>, Eigen::VectorXd, Eigen::VectorXd>
 {
 protected:
-    typedef Eigen::MatrixXd MatrixXd;
-    typedef Eigen::VectorXd VectorXd;
-    typedef Eigen::ArrayXd ArrayXd;
-    typedef Eigen::Map<const MatrixXd> MapMat;
-    typedef Eigen::Map<const VectorXd> MapVec;
-    typedef Eigen::SparseVector<double> SparseVector;
+    typedef double Scalar;
+    typedef Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> Matrix;
+    typedef Eigen::Matrix<Scalar, Eigen::Dynamic, 1> Vector;
+    typedef Eigen::Map<const Matrix> MapMat;
+    typedef Eigen::Map<const Vector> MapVec;
+    typedef const Eigen::Ref<const Matrix> ConstGenericMatrix;
+    typedef const Eigen::Ref<const Vector> ConstGenericVector;
+    typedef Eigen::SparseVector<Scalar> SparseVector;
 
-    const MatrixXd *datX;         // pointer to data matrix
-    const VectorXd *datY;         // pointer response vector
+    MapMat datX;                  // pointer to data matrix
+    MapVec datY;                  // pointer response vector
     bool use_XX;                  // whether to cache X'X
-    MatrixXd XX;                  // X'X
-    VectorXd XY;                  // X'y
-    double XY_norm;               // L2 norm of X'y
+    Matrix XX;                    // X'X
+    const Vector XY;              // X'y
+    const Scalar XY_norm;         // L2 norm of X'y
 
-    double sprad;                 // spectral radius of X'XX'X
-    double lambda;                // penalty parameter
-    double lambda0;               // minimum lambda to make coefficients all zero
+    Scalar sprad;                 // spectral radius of X'XX'X
+    Scalar lambda;                // penalty parameter
+    const Scalar lambda0;         // minimum lambda to make coefficients all zero
 
     int iter_counter;             // which iteration are we in?
 
-    VectorXd cache_Ax;            // cache Ax
+    Vector cache_Ax;              // cache Ax
 
 
 
-    void A_mult(VectorXd &res, SparseVector &x) // x -> Ax
+    // x -> Ax
+    void A_mult(Vector &res, SparseVector &x)
     {
         if(use_XX)
         {
             res.noalias() = XX * x;
         } else {
-            VectorXd tmp = (*datX) * x;
-            res.noalias() = (*datX).transpose() * tmp;
+            res.noalias() = datX.transpose() * (datX * x);
         }
     }
-    void At_mult(VectorXd &res, VectorXd &y) // y -> A'y
+    // y -> A'y
+    void At_mult(Vector &res, Vector &y)
     {
-        // The correct operation should be res = A'y.
-        // However, it is too expensive to calculate
-        // A'y (in function compute_eps_dual())
-        // and A'(newz - oldz) (in function update_z())
-        // in every iteration.
-        // Instead, we simply use ||newz - oldz||_2
-        // and ||y||_2 to calculate dual residual and
-        // eps_dual.
-        // In this case, At_mult will be an identity transformation.
-        res.swap(y);
+        if(use_XX)
+        {
+            res.noalias() = XX * y;
+        } else {
+            res.noalias() = datX.transpose() * (datX * y);
+        }
     }
-    void B_mult(VectorXd &res, VectorXd &z) // z -> Bz
+    // z -> Bz
+    void B_mult(Vector &res, Vector &z)
     {
         res.swap(z);
     }
-    double c_norm() { return XY_norm; } // ||c||_2
+    // ||c||_2
+    double c_norm() { return XY_norm; }
 
 
 
-    /*void active_set_update(SparseVector &res)
+    static void soft_threshold(SparseVector &res, const Vector &vec, const double &penalty)
     {
-        double penalty = 1.0 / (rho * sprad);
-        VectorXd vec = (*datX) * (cache_Ax + aux_z + dual_y / rho - XY) / sprad;
-        res = main_x;
-
-        for(SparseVector::InnerIterator iter(res); iter; ++iter)
-        {
-            double val = iter.value() - vec.dot((*datX).col(iter.index()));
-
-            if(val > penalty)
-                iter.valueRef() = val - penalty;
-            else if(val < -penalty)
-                iter.valueRef() = val + penalty;
-            else
-                iter.valueRef() = 0.0;
-        }
-
-        res.prune(0.0);
-    }*/
-    static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
-    {
+        int v_size = vec.size();
         res.setZero();
-        res.reserve(vec.size() / 2);
+        res.reserve(v_size);
 
-        double *ptr = vec.data();
-        for(int i = 0; i < vec.size(); i++)
+        const Scalar *ptr = vec.data();
+        for(int i = 0; i < v_size; i++)
         {
             if(ptr[i] > penalty)
                 res.insertBack(i) = ptr[i] - penalty;
@@ -111,6 +93,16 @@ protected:
                 res.insertBack(i) = ptr[i] + penalty;
         }
     }
+
+    // 4^k - 1, k = 0, 1, 2, ...
+    static bool is_regular_update(unsigned int x)
+    {
+        if(x == 0 || x == 3 || x == 15 || x == 63)  return true;
+        x++;
+        if( x & (x - 1) )  return false;
+        return x & 0x55555555;
+    }
+
     void next_x(SparseVector &res)
     {
         if(lambda > lambda0 - 1e-5)
@@ -119,30 +111,67 @@ protected:
             return;
         }
 
-        VectorXd rhs = (cache_Ax + adj_z + adj_y / rho - XY) / (-sprad);
-        VectorXd vec;
+        // iter_counter = 0, 3, 15, 63, .... (4^k - 1)
+        if(is_regular_update(iter_counter))
+        {
+            regular_update(res);
+        } else {
+            // active_set_update(res);
+            regular_update(res);
+        }
+
+        iter_counter++;
+    }
+    void regular_update(SparseVector &res)
+    {
+        Vector rhs = (cache_Ax + aux_z + dual_y / rho - XY) / (-sprad);
+        Vector vec;
         if(use_XX)
         {
             vec.noalias() = XX * rhs;
         } else {
-            VectorXd tmp = (*datX) * rhs;
-            vec.noalias() = (*datX).transpose() * tmp;
+            vec.noalias() = datX.transpose() * (datX * rhs);
         }
         vec += main_x;
         soft_threshold(res, vec, 1.0 / (rho * sprad));
     }
-    void next_z(VectorXd &res)
+    void active_set_update(SparseVector &res)
+    {
+        const Scalar gamma = sprad;
+        const Scalar penalty = 1.0 / (rho * gamma);
+        Vector vec = (cache_Ax + aux_z + dual_y / rho - XY) / gamma;
+        res = main_x;
+
+        Scalar *val_ptr = res.valuePtr();
+        const int *ind_ptr = res.innerIndexPtr();
+        const int nnz = res.nonZeros();
+
+        #pragma omp parallel for
+        for(int i = 0; i < nnz; i++)
+        {
+            const Scalar val = val_ptr[i] - vec.dot(XX.col(ind_ptr[i]));
+
+            if(val > penalty)
+                val_ptr[i] = val - penalty;
+            else if(val < -penalty)
+                val_ptr[i] = val + penalty;
+            else
+                val_ptr[i] = 0.0;
+        }
+
+        res.prune(0.0);
+    }
+    void next_z(Vector &res)
     {
         if(use_XX)
         {
             cache_Ax.noalias() = XX * main_x;
         } else {
-            VectorXd tmp = (*datX) * main_x;
-            cache_Ax.noalias() = (*datX).transpose() * tmp;
+            cache_Ax.noalias() = datX.transpose() * (datX * main_x);
         }
 
-        VectorXd z = cache_Ax + adj_y / rho - XY;
-        for(int i = 0; i < res.size(); i++)
+        Vector z = cache_Ax + dual_y / rho - XY;
+        for(int i = 0; i < dim_aux; i++)
         {
             if(z[i] > 0)
                 res[i] = -std::min(z[i], lambda);
@@ -150,7 +179,7 @@ protected:
                 res[i] = std::min(-z[i], lambda);
         }
     }
-    void next_residual(VectorXd &res)
+    void next_residual(Vector &res)
     {
         res.noalias() = cache_Ax + aux_z - XY;
     }
@@ -167,58 +196,53 @@ protected:
     }
     double compute_eps_dual()
     {
-        return dual_y.norm() * eps_rel + std::sqrt(double(dim_dual)) * eps_abs;
+        return std::sqrt(sprad) * dual_y.norm() * eps_rel + std::sqrt(double(dim_main)) * eps_abs;
     }
-    double compute_resid_dual(VectorXd &zdiff)
+    double compute_resid_dual(const Vector &new_z)
     {
-        return rho * zdiff.norm();
-    }
-    double compute_resid_combined()
-    {
-        VectorXd tmp = aux_z - adj_z;
-        return rho * resid_primal * resid_primal + rho * tmp.squaredNorm();
+        return rho * std::sqrt(sprad) * (new_z - aux_z).norm();
     }
 
 public:
-    ADMMDantzig(const MatrixXd &datX_, const VectorXd &datY_,
+    ADMMDantzig(ConstGenericMatrix &datX_, ConstGenericVector &datY_,
                 double eps_abs_ = 1e-6,
                 double eps_rel_ = 1e-6) :
         ADMMBase(datX_.cols(), datX_.cols(), datX_.cols(),
                  eps_abs_, eps_rel_),
-        datX(&datX_), datY(&datY_),
-        use_XX(datX_.rows() > datX_.cols() && datX_.cols() <= 1000),
-        XY(datX_.transpose() * datY_),
+        datX(datX_.data(), datX_.rows(), datX_.cols()),
+        datY(datY_.data(), datY_.size()),
+        use_XX(datX.rows() > datX.cols() && datX.cols() <= 1000),
+        XY(datX.transpose() * datY),
         XY_norm(XY.norm()),
-        lambda0(XY.array().abs().maxCoeff()),
+        lambda0(XY.cwiseAbs().maxCoeff()),
         cache_Ax(dim_dual)
     {
         if(use_XX)
         {
-            const MapMat mapX(datX_.data(), datX_.rows(), datX_.cols());
-            Linalg::cross_prod_lower(XX, mapX);
+            Linalg::cross_prod_lower(XX, datX);
             XX.triangularView<Eigen::Upper>() = XX.transpose();
 
             MatOpSymLower<double> op(XX);
-            SymEigsSolver<double, LARGEST_ALGE> eigs(&op, 1, 3);
+            Spectra::SymEigsSolver< double, Spectra::LARGEST_ALGE, MatOpSymLower<double> > eigs(&op, 1, 3);
             srand(0);
             eigs.init();
             eigs.compute(10, 0.1);
-            VectorXd evals = eigs.ritzvalues();
+            Vector evals = eigs.eigenvalues();
             sprad = evals[0];
             sprad *= sprad;
         } else {
-            MatOpXX<double> op(datX_);
-            SymEigsSolver<double, LARGEST_ALGE> eigs(&op, 1, 3);
+            MatOpXX<double> op(datX);
+            Spectra::SymEigsSolver< double, Spectra::LARGEST_ALGE, MatOpXX<double> > eigs(&op, 1, 3);
             srand(0);
             eigs.init();
             eigs.compute(10, 0.1);
-            VectorXd evals = eigs.ritzvalues();
+            Vector evals = eigs.eigenvalues();
             sprad = evals[0];
             sprad *= sprad;
         }
     }
 
-    double get_lambda_zero() { return lambda0; }
+    double get_lambda_zero() const { return lambda0; }
 
     // init() is a cold start for the first lambda
     void init(double lambda_, double rho_)
@@ -226,10 +250,6 @@ public:
         main_x.setZero();
         aux_z.setZero();
         dual_y.setZero();
-
-        adj_z.setZero();
-        adj_y.setZero();
-
         cache_Ax.setZero();
 
         lambda = lambda_;
@@ -243,6 +263,7 @@ public:
         eps_dual = 0.0;
         resid_primal = 9999;
         resid_dual = 9999;
+
         iter_counter = 0;
 
         rho_changed_action();
@@ -257,6 +278,7 @@ public:
         eps_dual = 0.0;
         resid_primal = 9999;
         resid_dual = 9999;
+
         iter_counter = 0;
     }
 };

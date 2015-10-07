@@ -39,11 +39,6 @@ RcppExport SEXP admm_dantzig(SEXP x_, SEXP y_, SEXP lambda_,
 {
 BEGIN_RCPP
 
-#if ADMM_PROFILE > 0
-    double t1, t2;
-    t1 = omp_get_wtime();
-#endif
-
     MatrixXd datX(as<MatrixXd>(x_));
     VectorXd datY(as<VectorXd>(y_));
 
@@ -61,25 +56,10 @@ BEGIN_RCPP
     bool standardize = as<bool>(standardize_);
     bool intercept = as<bool>(intercept_);
 
-#if ADMM_PROFILE > 0
-    t2 = omp_get_wtime();
-    Rcpp::Rcout << "part1: " << t2 - t1 << " secs.\n";
-#endif
-
-    DataStd datstd(n, p, standardize, intercept);
+    DataStd<double> datstd(n, p, standardize, intercept);
     datstd.standardize(datX, datY);
 
-#if ADMM_PROFILE > 0
-    t1 = omp_get_wtime();
-    Rcpp::Rcout << "part2: " << t1 - t2 << " secs.\n";
-#endif
-
     ADMMDantzig solver(datX, datY, eps_abs, eps_rel);
-
-#if ADMM_PROFILE > 0
-    t2 = omp_get_wtime();
-    Rcpp::Rcout << "part3: " << t2 - t1 << " secs.\n";
-#endif
 
     if(nlambda < 1)
     {
@@ -110,11 +90,6 @@ BEGIN_RCPP
         datstd.recover(beta0, res);
         write_beta_matrix(beta, i, beta0, res);
     }
-
-#if ADMM_PROFILE > 0
-    t1 = omp_get_wtime();
-    Rcpp::Rcout << "part4: " << t1 - t2 << " secs.\n";
-#endif
 
     beta.makeCompressed();
 
