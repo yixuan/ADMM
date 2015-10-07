@@ -19,17 +19,17 @@
 class ADMMEnetTall: public ADMMLassoTall
 {
 private:
-    ADMMLassoTall::Scalar alpha;
+    Scalar alpha;
 
-    void enet(ADMMLassoTall::SparseVector &res, const ADMMLassoTall::Vector &vec, const double &penalty)
+    void enet(SparseVector &res, const Vector &vec, const double &penalty)
     {
         int v_size = vec.size();
         res.setZero();
         res.reserve(v_size);
 
-        const ADMMLassoTall::Scalar thresh = alpha * penalty;
-        const ADMMLassoTall::Scalar denom = 1.0 + penalty * (1.0 - alpha);
-        const ADMMLassoTall::Scalar *ptr = vec.data();
+        const Scalar thresh = alpha * penalty;
+        const Scalar denom = 1.0 + penalty * (1.0 - alpha);
+        const Scalar *ptr = vec.data();
         for(int i = 0; i < v_size; i++)
         {
             if(ptr[i] > thresh)
@@ -38,15 +38,15 @@ private:
                 res.insertBack(i) = (ptr[i] + thresh) / denom;
         }
     }
-    void next_z(ADMMLassoTall::SparseVector &res)
+    void next_z(SparseVector &res)
     {
-        ADMMLassoTall::Vector vec = main_x + adj_y / rho;
+        Vector vec = main_x + adj_y / rho;
         enet(res, vec, lambda / rho);
     }
 
 public:
-    ADMMEnetTall(ADMMLassoTall::ConstGenericMatrix &datX_,
-                 ADMMLassoTall::ConstGenericVector &datY_,
+    ADMMEnetTall(ConstGenericMatrix &datX_,
+                 ConstGenericVector &datY_,
                  double alpha_ = 1.0,
                  double eps_abs_ = 1e-6,
                  double eps_rel_ = 1e-6) :
