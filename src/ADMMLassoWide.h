@@ -83,10 +83,10 @@ protected:
         }
     }
 
-    void active_set_update(SparseVector &res)
+    virtual void active_set_update(SparseVector &res)
     {
         const Scalar gamma = sprad;
-        Scalar penalty = lambda / (rho * gamma);
+        const Scalar penalty = lambda / (rho * gamma);
         tmp.noalias() = (cache_Ax + aux_z + dual_y / Scalar(rho)) / gamma;
         res = main_x;
 
@@ -126,7 +126,7 @@ protected:
         return x & 0x55555555;
     }
 
-    void next_x(SparseVector &res)
+    virtual void next_x(SparseVector &res)
     {
         // iter_counter = 0, 3, 15, 63, .... (4^k - 1)
         if(is_regular_update(iter_counter) && lambda < lambda0)
@@ -147,7 +147,7 @@ protected:
         }
         iter_counter++;
     }
-    virtual void next_z(Vector &res)
+    void next_z(Vector &res)
     {
 #ifdef __AVX__
         vtrX.mult_spvec(main_x, cache_Ax.data());
