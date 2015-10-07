@@ -57,14 +57,16 @@ inline void vec_add(float *dy, const float alpha, const float *dx, const int n)
 }
 
 
-// Wrappers for Level 2 and 3
 
-typedef Eigen::Ref<Eigen::MatrixXd>             GenericMatrix;
+// Wrappers for Level 2
+
 typedef const Eigen::Ref<const Eigen::MatrixXd> ConstGenericMatrix;
-typedef Eigen::Ref<Eigen::VectorXd>             GenericVector;
 typedef const Eigen::Ref<const Eigen::VectorXd> ConstGenericVector;
 
-inline void mat_vec_prod(Eigen::VectorXd &res, const Eigen::MatrixXd &X, const Eigen::VectorXd &v,
+typedef const Eigen::Ref<const Eigen::MatrixXf> ConstGenericMatrixf;
+typedef const Eigen::Ref<const Eigen::VectorXf> ConstGenericVectorf;
+
+inline void mat_vec_prod(Eigen::VectorXd &res, ConstGenericMatrix &X, ConstGenericVector &v,
                          const double &alpha = 1.0, const double &beta = 0.0)
 {
     const int n = X.rows();
@@ -75,15 +77,7 @@ inline void mat_vec_prod(Eigen::VectorXd &res, const Eigen::MatrixXd &X, const E
     dgemv_("N", &n, &p, &alpha, X.data(), &n, v.data(), &inc, &beta, res.data(), &inc);
 }
 
-inline void mat_vec_prod(double *res, const double *X, const double *v, int n, int p,
-                         const double &alpha = 1.0, const double &beta = 0.0)
-{
-    const int inc = 1;
-
-    dgemv_("N", &n, &p, &alpha, X, &n, v, &inc, &beta, res, &inc);
-}
-
-inline void mat_vec_tprod(Eigen::VectorXd &res, const Eigen::MatrixXd &X, const Eigen::VectorXd &v,
+inline void mat_vec_tprod(Eigen::VectorXd &res, ConstGenericMatrix &X, ConstGenericVector &v,
                           const double &alpha = 1.0, const double &beta = 0.0)
 {
     const int n = X.rows();
@@ -94,34 +88,11 @@ inline void mat_vec_tprod(Eigen::VectorXd &res, const Eigen::MatrixXd &X, const 
     dgemv_("T", &n, &p, &alpha, X.data(), &n, v.data(), &inc, &beta, res.data(), &inc);
 }
 
-inline void mat_vec_tprod(double *res, const double *X, const double *v, int n, int p,
-                          const double &alpha = 1.0, const double &beta = 0.0)
-{
-    const int inc = 1;
 
-    dgemv_("T", &n, &p, &alpha, X, &n, v, &inc, &beta, res, &inc);
-}
+
+// Wrappers for Level 3
 
 // Calculating X'X
-inline void cross_prod(Eigen::MatrixXd &res, ConstGenericMatrix &X)
-{
-    const double one = 1.0;
-    const double zero = 0.0;
-    const char trans = 'T';
-    const char no_trans = 'N';
-
-    const int n = X.rows();
-    const int p = X.cols();
-    const double *x_ptr = X.data();
-
-    res.resize(p, p);
-    double *res_ptr = res.data();
-
-    dgemm_(&trans, &no_trans, &p, &p, &n,
-           &one, x_ptr, &n, x_ptr, &n,
-           &zero, res_ptr, &p);
-}
-
 inline void cross_prod_lower(Eigen::MatrixXd &res, ConstGenericMatrix &X)
 {
     const double one = 1.0;
@@ -138,7 +109,24 @@ inline void cross_prod_lower(Eigen::MatrixXd &res, ConstGenericMatrix &X)
            &one, x_ptr, &n,
            &zero, res_ptr, &p);
 }
+inline void cross_prod_lower(Eigen::MatrixXf &res, ConstGenericMatrixf &X)
+{
+    const float one = 1.0;
+    const float zero = 0.0;
 
+    const int n = X.rows();
+    const int p = X.cols();
+    const float *x_ptr = X.data();
+
+    res.resize(p, p);
+    float *res_ptr = res.data();
+
+    ssyrk_("L", "T", &p, &n,
+           &one, x_ptr, &n,
+           &zero, res_ptr, &p);
+}
+
+// Calculating XX'
 inline void tcross_prod_lower(Eigen::MatrixXd &res, ConstGenericMatrix &X)
 {
     const double one = 1.0;
@@ -155,8 +143,7 @@ inline void tcross_prod_lower(Eigen::MatrixXd &res, ConstGenericMatrix &X)
            &one, x_ptr, &n,
            &zero, res_ptr, &n);
 }
-
-inline void tcross_prod_lower(Eigen::MatrixXf &res, const Eigen::MatrixXf &X)
+inline void tcross_prod_lower(Eigen::MatrixXf &res, ConstGenericMatrixf &X)
 {
     const float one = 1.0;
     const float zero = 0.0;
