@@ -104,6 +104,8 @@ public:
         eps_abs(eps_abs_), eps_rel(eps_rel_)
     {}
 
+    virtual ~ADMMBase() {}
+
     void update_x()
     {
         eps_primal = compute_eps_primal();
