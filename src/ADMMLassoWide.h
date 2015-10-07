@@ -3,8 +3,8 @@
 
 #include "ADMMBase.h"
 #include "Linalg/BlasWrapper.h"
-#include "Eigs/SymEigsSolver.h"
-#include "Eigs/MatOpDense.h"
+#include "Spectra/SymEigsSolver.h"
+#include "ADMMMatOp.h"
 
 #ifdef __AVX__
 #include "AVX.h"
@@ -199,11 +199,11 @@ public:
         Matrix XX;
         Linalg::tcross_prod_lower(XX, datX);
         MatOpSymLower<Scalar> op(XX);
-        SymEigsSolver<Scalar, LARGEST_ALGE> eigs(&op, 1, 3);
+        Spectra::SymEigsSolver< Scalar, Spectra::LARGEST_ALGE, MatOpSymLower<Scalar> > eigs(&op, 1, 3);
         srand(0);
         eigs.init();
         eigs.compute(10, 0.1);
-        Eigen::VectorXf evals = eigs.ritzvalues();
+        Vector evals = eigs.eigenvalues();
         sprad = evals[0];
 
 #ifdef __AVX__

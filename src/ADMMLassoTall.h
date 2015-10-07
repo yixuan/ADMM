@@ -3,8 +3,8 @@
 
 #include "FADMMBase.h"
 #include "Linalg/BlasWrapper.h"
-#include "Eigs/SymEigsSolver.h"
-#include "Eigs/MatOpDense.h"
+#include "Spectra/SymEigsSolver.h"
+#include "ADMMMatOp.h"
 
 // minimize  1/2 * ||y - X * beta||^2 + lambda * ||beta||_1
 //
@@ -192,11 +192,11 @@ public:
         if(rho <= 0)
         {
             MatOpSymLower<Scalar> op(XX);
-            SymEigsSolver<Scalar, LARGEST_ALGE> eigs(&op, 1, 3);
+            Spectra::SymEigsSolver< Scalar, Spectra::LARGEST_ALGE, MatOpSymLower<Scalar> > eigs(&op, 1, 3);
             srand(0);
             eigs.init();
             eigs.compute(10, 0.1);
-            Vector evals = eigs.ritzvalues();
+            Vector evals = eigs.eigenvalues();
             rho = std::pow(evals[0], 1.0 / 3) * std::pow(lambda, 2.0 / 3);
         }
 
