@@ -222,7 +222,10 @@ public:
         dual_y.setZero();
 
         lambda = lambda_;
-        rho = std::pow(lambda / sprad, 1.0 / 3);
+        rho = rho_;
+
+        if(rho <= 0)
+            rho = std::pow(lambda / sprad, 1.0 / 3);
 
         eps_primal = 0.0;
         eps_dual = 0.0;
