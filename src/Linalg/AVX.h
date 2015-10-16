@@ -7,6 +7,86 @@
 #ifdef __AVX__
 #include <immintrin.h>
 
+
+class MemAligned
+{
+private:
+    // http://stackoverflow.com/questions/6563120/what-does-posix-memalign-memalign-do
+    static inline void *malloc_aligned(size_t align, size_t len)
+    {
+        // align == 0, or not a power of 2
+        if(align == 0 || (align & (align - 1)))
+            return (void *)0;
+
+        // align is not a multiple of sizeof(void *)
+        if(align % sizeof(void *))
+            return (void *)0;
+
+        // len + align - 1 to guarantee the length with alignment,
+        // sizeof(size_t) to record the start position
+        const size_t total = len + align - 1 + sizeof(size_t);
+        char *data = (char *)malloc(total);
+
+        if(data)
+        {
+            // the start location of "data"", used to free the memory
+            const void * const start = (void *)data;
+            // reserve space to store "start"
+            data += sizeof(size_t);
+            // find an integer greater than or equal to "data",
+            // and is a multiple of "align"
+            // the padding will be align - data % align
+            size_t padding = align - (((size_t)data) % align);
+            // move data to the aligned location
+            data += padding;
+            // location to write "start"
+            size_t *recorder = (size_t *)(data - sizeof(size_t));
+            // write "start" to recorder
+            *recorder = (size_t)start;
+        }
+
+        return (void *)data;
+    }
+
+    static inline void free_aligned(void *ptr)
+    {
+        if(ptr)
+        {
+            char *data = (char *)ptr;
+            size_t *recorder = (size_t *)(data - sizeof(size_t));
+            data = (char *)(*recorder);
+            free(data);
+        }
+    }
+public:
+    static inline void *allocate(size_t align, size_t len)
+    {
+        void *ptr;
+    #ifdef _WIN32
+        ptr = _aligned_malloc(len, align);
+    #elif defined(posix_memalign)
+        posix_memalign(&ptr, align, len);
+    #else
+        ptr = malloc_aligned(align, len);
+    #endif
+
+        return (void *) ptr;
+    }
+
+    static inline void destroy(void *ptr)
+    {
+    #ifdef _WIN32
+        _aligned_free(ptr);
+    #elif defined(posix_memalign)
+        free(ptr);
+    #else
+        free_aligned(ptr);
+    #endif
+    }
+};
+
+
+
 class vtrMatrixf
 {
 private:
@@ -31,12 +111,11 @@ public:
         const int tail = nrow - npack * 8;
         nrowx = npack + int(tail != 0);
 
-        float *rem;
-        posix_memalign((void **)&rem, 32, 8 * sizeof(float));
+        float *rem = (float *) MemAligned::allocate(32, 8 * sizeof(float));
         std::fill(rem, rem + 8, float(0));
 
         __m256 *data_ptr;
-        posix_memalign((void **)&data, 32, nrowx * (ncol + 1) * sizeof(__m256));
+        data = (__m256 *) MemAligned::allocate(32, nrowx * (ncol + 1) * sizeof(__m256));
         vdata = data;
         mdata = data + nrowx;
         data_ptr = mdata;
@@ -69,13 +148,12 @@ public:
             }
         }
 
-        free(rem);
-
+        MemAligned::destroy(rem);
     }
 
     ~vtrMatrixf()
     {
-        free(data);
+        MemAligned::destroy(data);
     }
 
     void read_vec(const float *vec)
@@ -83,8 +161,7 @@ public:
         const int npack = nrow / 8;
         const int tail = nrow - npack * 8;
 
-        float *rem;
-        posix_memalign((void **)&rem, 32, 8 * sizeof(float));
+        float *rem = (float *) MemAligned::allocate(32, 8 * sizeof(float));
         std::fill(rem, rem + 8, float(0));
 
         __m256 *data_ptr = vdata;
@@ -100,7 +177,7 @@ public:
             *data_ptr = _mm256_load_ps(rem);
         }
 
-        free(rem);
+        MemAligned::destroy(rem);
     }
 
     void mult_spvec(const Eigen::SparseVector<float> &spvec, float *res)
