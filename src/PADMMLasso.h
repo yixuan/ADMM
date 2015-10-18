@@ -20,7 +20,14 @@ private:
         for(SparseVector::InnerIterator iter(aux_z); iter; ++iter)
             rhs[iter.index()] += rho * iter.value();
 
-        res.noalias() = solver.solve(rhs);
+        if(subA.rows() >= subA.cols())
+        {
+            res.noalias() = solver.solve(rhs);
+        } else {
+            res.noalias() = rhs - subA.transpose() * solver.solve(subA * rhs);
+            res /= float(rho);
+        }
+
     }
     // res = primal residual in next iteration
     void next_residual(Vector &res)
@@ -45,7 +52,10 @@ public:
         rho = rho_;
 
         Matrix AA;
-        Linalg::cross_prod_lower(AA, subA);
+        if(subA.rows() >= subA.cols())
+            Linalg::cross_prod_lower(AA, subA);
+        else
+            Linalg::tcross_prod_lower(AA, subA);
         AA.diagonal().array() += rho;
         solver.compute(AA.selfadjointView<Eigen::Lower>());
 
