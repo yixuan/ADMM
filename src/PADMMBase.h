@@ -2,6 +2,7 @@
 #define PADMMBASE_H
 
 #include <RcppEigen.h>
+#include "Linalg/BlasWrapper.h"
 
 // Parallel ADMM by splitting observations
 //   minimize \sum loss(A_i * x - b_i) + r(x)
@@ -73,7 +74,8 @@ public:
 
         comp_squared_resid_primal = newr.squaredNorm();
 
-        dual_y.noalias() += rho * newr;
+        // dual_y.noalias() += rho * newr;
+        Linalg::vec_add(dual_y.data(), Scalar(rho), newr.data(), dim_main);
     }
 
     virtual double squared_x_norm() { return main_x.squaredNorm(); }
@@ -176,7 +178,7 @@ public:
         update_rho();
 
         #ifdef _OPENMP
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(static)
         #endif
         for(int i = 0; i < n_comp; i++)
         {
@@ -200,7 +202,7 @@ public:
         double resid_primal_collector = 0.0;
 
         #ifdef _OPENMP
-        #pragma omp parallel for schedule(dynamic) reduction(+:resid_primal_collector)
+        #pragma omp parallel for schedule(static) reduction(+:resid_primal_collector)
         #endif
         for(int i = 0; i < n_comp; i++)
         {
