@@ -2,200 +2,129 @@
 #define PADMMLASSO_H
 
 #include "PADMMBase.h"
+#include "Linalg/BlasWrapper.h"
 
-class PADMMLasso_Worker: public PADMMBase_Worker< Eigen::SparseVector<double> >
+class PADMMLasso_Worker: public PADMMBase_Worker< float, Eigen::VectorXf, Eigen::SparseVector<float> >
 {
 private:
-    typedef Eigen::MatrixXd MatrixXd;
-    typedef Eigen::VectorXd VectorXd;
-    typedef Eigen::ArrayXd ArrayXd;
-    typedef Eigen::SparseVector<double> SparseVector;
-    typedef Eigen::Map<const MatrixXd> MapMat;
+    typedef Eigen::SparseVector<float> SparseVector;
+    typedef Eigen::LLT<Matrix> LLT;
 
-    double lambda;  // L1 penalty parameter
-    double lambda0; // with this lambda, all coefficients will be zero
-    double sprad;   // spectral radius of A_i'A_i
-
-    int iter_counter;
-
-    virtual void active_set_update(SparseVector &res)
-    {
-        double gamma = 2 * rho + sprad;
-        double penalty = lambda / (rho * gamma);
-        VectorXd vec = ((*dual_y) / rho + (*resid_primal_vec)) / gamma;
-        res = main_x;
-
-        for(SparseVector::InnerIterator iter(res); iter; ++iter)
-        {
-            double val = iter.value() - vec.dot(datX.col(iter.index()));
-
-            if(val > penalty)
-            {
-                iter.valueRef() = val - penalty;
-            }
-            else if(val < -penalty)
-            {
-                iter.valueRef() = val + penalty;
-            }
-            else
-            {
-                iter.valueRef() = 0.0;
-            }
-        }
-
-        res.prune(0.0);
-    }
+    Vector Ab;
+    LLT solver;
 
     // res = x in next iteration
-    virtual void next_x(SparseVector &res)
+    void next_x(Vector &res)
     {
-        if(iter_counter % 15 == 0 && lambda < lambda0)
-        {
-            double gamma = 2 * rho + sprad;
-            VectorXd tmp = (*dual_y) / rho + (*resid_primal_vec);
-            VectorXd vec(dim_main);
-            if(use_BLAS)
-            {
-                BLAStprod(vec, -1.0/gamma, datX.data(), dim_dual, dim_main, tmp);
-            }
-            else
-            {
-                vec.noalias() = -datX.transpose() * tmp / gamma;
-            }
-            vec += main_x;
-            soft_threshold(res, vec, lambda / (rho * gamma));
-        } else {
-            active_set_update(res);
-        }
-        iter_counter++;
+        Vector rhs = Ab - dual_y;
+        for(SparseVector::InnerIterator iter(aux_z); iter; ++iter)
+            rhs[iter.index()] += rho * iter.value();
+
+        res.noalias() = solver.solve(rhs);
     }
-
-    // calculating the spectral radius of X'X
-    // in this case it is the largest eigenvalue of X'X
-    static double spectral_radius(const MapMat &X)
+    // res = primal residual in next iteration
+    void next_residual(Vector &res)
     {
-        Rcpp::NumericMatrix mat = Rcpp::wrap(X);
-        Rcpp::Environment ADMM = Rcpp::Environment::namespace_env("ADMM");
-        Rcpp::Function spectral_radius = ADMM[".spectral_radius_xx"];
-
-        return Rcpp::as<double>(spectral_radius(mat));
+        res = main_x;
+        res -= aux_z;
     }
 
 public:
-    PADMMLasso_Worker(const double *datX_ptr_,
-                      int X_rows_, int X_cols_,
-                      const VectorXd &dual_y_,
-                      const VectorXd &resid_primal_vec_,
-                      double lambda0_,
-                      bool use_BLAS_) :
-        PADMMBase_Worker(datX_ptr_, X_rows_, X_cols_, dual_y_, resid_primal_vec_, use_BLAS_),
-        lambda0(lambda0_)
-    {
-        sprad = spectral_radius(datX);
-    }
+    PADMMLasso_Worker(ConstGenericMatrix &subA_, ConstGenericVector &subb_, SparseVector &aux_z_) :
+        PADMMBase_Worker(subA_, subb_, aux_z_),
+        Ab(subA.transpose() * subb)
+    {}
 
-    virtual ~PADMMLasso_Worker() {}
-
-    virtual double get_spectral_radius() { return sprad; }
+    ~PADMMLasso_Worker() {}
 
     // init() is a cold start for the first lambda
-    virtual void init(double lambda_, double rho_)
+    void init(double rho_)
     {
         main_x.setZero();
-        Ax.setZero();
-        aux_z.setZero();
-        lambda = lambda_;
+        dual_y.setZero();
         rho = rho_;
-        iter_counter = 0;
+
+        Matrix AA;
+        Linalg::cross_prod_lower(AA, subA);
+        AA.diagonal().array() += rho;
+        solver.compute(AA.selfadjointView<Eigen::Lower>());
 
         rho_changed_action();
     }
-    // when computing for the next lambda, we can use the
-    // current main_x, aux_z, dual_y and rho as initial values
-    virtual void init_warm(double lambda_)
-    {
-        lambda = lambda_;
-        iter_counter = 0;
-    }
 
-    static void soft_threshold(SparseVector &res, VectorXd &vec, const double &penalty)
+    void add_xu_to(Vector &res)
     {
-        res.setZero();
-        res.reserve(vec.size() / 2);
-
-        double *ptr = vec.data();
-        for(int i = 0; i < vec.size(); i++)
-        {
-            if(ptr[i] > penalty)
-            {
-                res.insertBack(i) = ptr[i] - penalty;
-            }
-            else if(ptr[i] < -penalty)
-            {
-                res.insertBack(i) = ptr[i] + penalty;
-            }
-        }
+        res.noalias() += main_x + dual_y / rho;
     }
 };
 
-class PADMMLasso_Master: public PADMMBase_Master< Eigen::SparseVector<double> >
+class PADMMLasso_Master: public PADMMBase_Master< float, Eigen::VectorXf, Eigen::SparseVector<float> >
 {
 private:
-    typedef Eigen::MatrixXd MatrixXd;
-    typedef Eigen::VectorXd VectorXd;
-    typedef Eigen::ArrayXd ArrayXd;
-    typedef Eigen::SparseVector<double> SparseVector;
+    typedef Eigen::Map<const Matrix> MapMat;
+    typedef Eigen::Map<const Vector> MapVec;
+    typedef const Eigen::Ref<const Matrix> ConstGenericMatrix;
+    typedef const Eigen::Ref<const Vector> ConstGenericVector;
+    typedef Eigen::SparseVector<float> SparseVector;
 
-    const VectorXd *datY;  // response vector
-    double avg_sprad;      // average spectral radius of A_i' * A_i
-    double lambda0;        // with this lambda, all coefficients will be zero
+    double lambda;         // L1 penalty parameter
+    const double lambda0;  // with this lambda, all coefficients will be zero
 
-    virtual void next_z_bar(VectorXd &res, VectorXd &Ax_bar)
+    static void soft_threshold(SparseVector &res, const Vector &vec, const double &penalty)
     {
-        res.noalias() = ((*datY) + rho * Ax_bar + dual_y) / (n_comp + rho);
+        int v_size = vec.size();
+        res.setZero();
+        res.reserve(v_size);
+
+        const float *ptr = vec.data();
+        for(int i = 0; i < v_size; i++)
+        {
+            if(ptr[i] > penalty)
+                res.insertBack(i) = ptr[i] - penalty;
+            else if(ptr[i] < -penalty)
+                res.insertBack(i) = ptr[i] + penalty;
+        }
     }
-    virtual void rho_changed_action() {}
+
+    void next_z(SparseVector &res)
+    {
+        Vector vec = Vector::Zero(dim_aux);
+        for(int i = 0; i < n_comp; i++)
+        {
+            static_cast<PADMMLasso_Worker *>(worker[i])->add_xu_to(vec);
+        }
+        vec /= n_comp;
+        soft_threshold(res, vec, lambda / (rho * n_comp));
+    }
 
 public:
-    PADMMLasso_Master(const MatrixXd &datX_, const VectorXd &datY_,
-                      int nthread_, bool use_BLAS_,
+    PADMMLasso_Master(ConstGenericMatrix &datX_, ConstGenericVector &datY_,
+                      int nthread_,
                       double eps_abs_ = 1e-6,
                       double eps_rel_ = 1e-6) :
-        PADMMBase_Master(datX_, nthread_, eps_abs_, eps_rel_),
-        datY(&datY_)
+        PADMMBase_Master(datX_.cols(), nthread_, eps_abs_, eps_rel_),
+        lambda0((datX_.transpose() * datY_).cwiseAbs().maxCoeff())
     {
-        lambda0 = (datX_.transpose() * datY_).array().abs().maxCoeff();
+        const int chunk_size = datX_.rows() / n_comp;
+        const int last_size = chunk_size + datX_.rows() % n_comp;
 
-        int chunk_size = dim_main / n_comp;
-        int last_size = chunk_size + dim_main % n_comp;
-        double avg_sprad_collector = 0.0;
-
-// we can no longer parallelize this since the constructor will call an R function
-/*
 #ifdef _OPENMP
-        #pragma omp parallel for schedule(dynamic) reduction(+:avg_sprad_collector)
+        #pragma omp parallel for schedule(dynamic)
 #endif
-*/
         for(int i = 0; i < n_comp; i++)
         {
             if(i < n_comp - 1)
                 worker[i] = new PADMMLasso_Worker(
-                    &datX_(0, i * chunk_size), dim_dual, chunk_size,
-                    dual_y, resid_primal_vec,
-                    lambda0, use_BLAS_);
+                    datX_.block(i * chunk_size, 0, chunk_size, dim_main),
+                    datY_.segment(i * chunk_size, chunk_size), aux_z);
             else
                 worker[i] = new PADMMLasso_Worker(
-                    &datX_(0, i * chunk_size), dim_dual, last_size,
-                    dual_y, resid_primal_vec,
-                    lambda0, use_BLAS_);
-
-            avg_sprad_collector += static_cast<PADMMLasso_Worker *>(worker[i])->get_spectral_radius();
+                    datX_.block(i * chunk_size, 0, last_size, dim_main),
+                    datY_.segment(i * chunk_size, last_size), aux_z);
         }
-
-        avg_sprad = avg_sprad_collector / n_comp;
     }
 
-    virtual ~PADMMLasso_Master()
+    ~PADMMLasso_Master()
     {
         for(int i = 0; i < n_comp; i++)
         {
@@ -203,17 +132,21 @@ public:
         }
     }
 
-    virtual double get_lambda_zero() { return lambda0; }
+    double get_lambda_zero() { return lambda0; }
 
     // init() is a cold start for the first lambda
-    virtual void init(double lambda_, double rho_ratio_)
+    void init(double lambda_, double rho_)
     {
-        dual_y.setZero();
-        resid_primal_vec.setZero();
-        rho = lambda_ / (rho_ratio_ * avg_sprad);
+        aux_z.setZero();
+        lambda = lambda_;
+        rho = rho_;
+
+        if(rho <= 0)
+            rho = lambda / n_comp;
+
         for(int i = 0; i < n_comp; i++)
         {
-            static_cast<PADMMLasso_Worker *>(worker[i])->init(lambda_, rho);
+            static_cast<PADMMLasso_Worker *>(worker[i])->init(rho);
         }
         eps_primal = 0.0;
         eps_dual = 0.0;
@@ -224,34 +157,14 @@ public:
     }
     // when computing for the next lambda, we can use the
     // current main_x, aux_z, dual_y and rho as initial values
-    virtual void init_warm(double lambda_)
+    void init_warm(double lambda_)
     {
-        for(int i = 0; i < n_comp; i++)
-        {
-            static_cast<PADMMLasso_Worker *>(worker[i])->init_warm(lambda_);
-        }
+        lambda = lambda_;
+
         eps_primal = 0.0;
         eps_dual = 0.0;
         resid_primal = 9999;
         resid_dual = 9999;
-    }
-
-    virtual SparseVector get_x()
-    {
-        SparseVector res(dim_main);
-        res.reserve(dim_main / 2);
-
-        int offset = 0;
-        for(int i = 0; i < n_comp; i++)
-        {
-            SparseVector comp = worker[i]->get_x();
-            for(SparseVector::InnerIterator iter(comp); iter; ++iter)
-            {
-                res.insertBack(iter.index() + offset) = iter.value();
-            }
-            offset += comp.size();
-        }
-        return res;
     }
 };
 
