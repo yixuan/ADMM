@@ -149,11 +149,11 @@ ADMM_Lasso$methods(
             .Call("admm_parlasso", .self$x, .self$y, .self$lambda,
                   .self$nlambda, .self$lambda_min_ratio,
                   .self$standardize, .self$intercept,
-                  .self$nthread, FALSE,
+                  .self$nthread,
                   list(maxit = .self$maxit,
                        eps_abs = .self$eps_abs,
                        eps_rel = .self$eps_rel,
-                       rho_rel = .self$rho_rel),
+                       rho = .self$rho),
                   PACKAGE = "ADMM")
         do.call(ADMM_Lasso_fit, res)
     }
