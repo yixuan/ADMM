@@ -25,14 +25,14 @@ protected:
     typedef const Eigen::Ref<const Matrix> ConstGenericMatrix;
     typedef const Eigen::Ref<const Vector> ConstGenericVector;
 
-    Matrix subA;             // (sub)data matrix sent to this worker
-    Vector subb;
+    Matrix subA;             // (sub) data matrix sent to this worker
+    Vector subb;             // (sub) response vector sent to this worker
     const int dim_main;      // length of x_i
 
     VecTypeX main_x;         // parameters to be optimized
     const VecTypeZ &aux_z;   // z from master, read-only for workers
     Vector dual_y;           // Lagrangian multiplier
-    double comp_squared_resid_primal;
+    double comp_squared_resid_primal;  // squared norm of primal residual on this worker
     double rho;              // augmented Lagrangian parameter
 
     // res = x in next iteration
@@ -91,9 +91,9 @@ protected:
     typedef Eigen::Matrix<Scalar, Eigen::Dynamic, 1> Vector;
     typedef Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> Matrix;
 
-    const int dim_main;        // number of predictors
-    const int dim_aux;
-    const int dim_dual;
+    const int dim_main;        // dimension of main_x
+    const int dim_aux;         // dimension of aux_z
+    const int dim_dual;        // dimension of dual_y
     const int n_comp;          // number of components in the objective function
     std::vector<PADMMBase_Worker<Scalar, VecTypeX, VecTypeZ> *> worker;  // each worker handles a component
 
@@ -137,6 +137,7 @@ protected:
 
         return std::sqrt(y_norm_collector) * eps_rel + std::sqrt(double(dim_main * n_comp)) * eps_abs;
     }
+    // calculating dual residual
     virtual double compute_resid_dual(const VecTypeZ &new_z)
     {
         VecTypeZ zdiff = new_z - aux_z;
