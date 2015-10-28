@@ -95,6 +95,43 @@ protected:
             rho_changed_action();
         } */
     }
+    // Debugging residual information
+    void print_header(std::string title)
+    {
+        const int width = 80;
+        const char sep = ' ';
+
+        Rcpp::Rcout << std::endl << std::string(width, '=') << std::endl;
+        Rcpp::Rcout << std::string((width - title.length()) / 2, ' ') << title << std::endl;
+        Rcpp::Rcout << std::string(width, '-') << std::endl;
+
+        Rcpp::Rcout << std::left << std::setw(7)  << std::setfill(sep) << "iter";
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << "eps_primal";
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << "resid_primal";
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << "eps_dual";
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << "resid_dual";
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << "rho";
+        Rcpp::Rcout << std::endl;
+
+        Rcpp::Rcout << std::string(width, '-') << std::endl;
+    }
+    void print_row(int iter)
+    {
+        const char sep = ' ';
+
+        Rcpp::Rcout << std::left << std::setw(7)  << std::setfill(sep) << iter;
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << eps_primal;
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << resid_primal;
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << eps_dual;
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << resid_dual;
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << rho;
+        Rcpp::Rcout << std::endl;
+    }
+    void print_footer()
+    {
+        const int width = 80;
+        Rcpp::Rcout << std::string(width, '=') << std::endl << std::endl;
+    }
 
 public:
     ADMMBase(int n_, int m_, int p_,
@@ -110,7 +147,6 @@ public:
     {
         eps_primal = compute_eps_primal();
         eps_dual = compute_eps_dual();
-        update_rho();
 
         VecTypeX newx(dim_main);
         next_x(newx);
@@ -146,15 +182,24 @@ public:
     {
         int i;
 
+        // print_header("ADMM iterations");
+
         for(i = 0; i < maxit; i++)
         {
             update_x();
             update_z();
             update_y();
 
+            // print_row(i);
+
             if(converged())
                 break;
+
+            if(i > 3)
+                update_rho();
         }
+
+        // print_footer();
 
         return i + 1;
     }
