@@ -84,16 +84,28 @@ protected:
     // increase or decrease rho in iterations
     virtual void update_rho()
     {
-        /* if(resid_primal > 10 * resid_dual)
+        if(resid_primal / eps_primal > 10 * resid_dual / eps_dual)
         {
             rho *= 2;
             rho_changed_action();
         }
-        else if(resid_dual > 10 * resid_primal)
+        else if(resid_dual / eps_dual > 10 * resid_primal / eps_primal)
         {
-            rho *= 0.5;
+            rho /= 2;
             rho_changed_action();
-        } */
+        }
+
+        if(resid_primal < eps_primal)
+        {
+            rho /= 1.2;
+            rho_changed_action();
+        }
+        
+        if(resid_dual < eps_dual)
+        {
+            rho *= 1.2;
+            rho_changed_action();
+        }
     }
     // Debugging residual information
     void print_header(std::string title)
