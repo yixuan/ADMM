@@ -94,6 +94,7 @@ protected:
             res[iter.index()] -= iter.value();
     }
     void rho_changed_action() {}
+    void update_rho() {}
 
 
 
