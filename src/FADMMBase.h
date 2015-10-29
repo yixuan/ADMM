@@ -104,16 +104,65 @@ protected:
     // increase or decrease rho in iterations
     virtual void update_rho()
     {
-        /* if(resid_primal > 10 * resid_dual)
+        if(resid_primal / eps_primal > 10 * resid_dual / eps_dual)
         {
             rho *= 2;
             rho_changed_action();
         }
-        else if(resid_dual > 10 * resid_primal)
+        else if(resid_dual / eps_dual > 10 * resid_primal / eps_primal)
         {
-            rho *= 0.5;
+            rho /= 2;
             rho_changed_action();
-        } */
+        }
+
+        if(resid_primal < eps_primal)
+        {
+            rho /= 1.2;
+            rho_changed_action();
+        }
+
+        if(resid_dual < eps_dual)
+        {
+            rho *= 1.2;
+            rho_changed_action();
+        }
+    }
+    // Debugging residual information
+    void print_header(std::string title)
+    {
+        const int width = 80;
+        const char sep = ' ';
+
+        Rcpp::Rcout << std::endl << std::string(width, '=') << std::endl;
+        Rcpp::Rcout << std::string((width - title.length()) / 2, ' ') << title << std::endl;
+        Rcpp::Rcout << std::string(width, '-') << std::endl;
+
+        Rcpp::Rcout << std::left << std::setw(7)  << std::setfill(sep) << "iter";
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << "eps_primal";
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << "resid_primal";
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << "eps_dual";
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << "resid_dual";
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << "rho";
+        Rcpp::Rcout << std::endl;
+
+        Rcpp::Rcout << std::string(width, '-') << std::endl;
+    }
+    void print_row(int iter)
+    {
+        const char sep = ' ';
+
+        Rcpp::Rcout << std::left << std::setw(7)  << std::setfill(sep) << iter;
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << eps_primal;
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << resid_primal;
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << eps_dual;
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << resid_dual;
+        Rcpp::Rcout << std::left << std::setw(13) << std::setfill(sep) << rho;
+        Rcpp::Rcout << std::endl;
+    }
+    void print_footer()
+    {
+        const int width = 80;
+        Rcpp::Rcout << std::string(width, '=') << std::endl << std::endl;
     }
 
 public:
@@ -133,7 +182,6 @@ public:
     {
         eps_primal = compute_eps_primal();
         eps_dual = compute_eps_dual();
-        update_rho();
 
         VecTypeX newx(dim_main);
         next_x(newx);
@@ -170,6 +218,8 @@ public:
     {
         int i;
 
+        // print_header("ADMM iterations");
+
         for(i = 0; i < maxit; i++)
         {
             old_z = aux_z;
@@ -180,13 +230,13 @@ public:
             update_z();
             update_y();
 
+            // print_row(i);
+
             if(converged())
                 break;
 
             double old_c = adj_c;
             adj_c = compute_resid_combined();
-
-            // debug_info();
 
             if(adj_c < 0.999 * old_c)
             {
@@ -202,7 +252,12 @@ public:
                 std::copy(old_y.data(), old_y.data() + dim_dual, adj_y.data());
                 adj_c = old_c / 0.999;
             }
+
+            if(i > 5)
+                update_rho();
         }
+
+        // print_footer();
 
         return i + 1;
     }
