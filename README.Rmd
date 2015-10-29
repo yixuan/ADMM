@@ -4,17 +4,22 @@ output:
     keep_md: yes
 ---
 
+```{r setup, include=FALSE}
+library(knitr)
+opts_chunk$set(message = FALSE)
+```
+
 ## Introduction
 
 `ADMM` is an R package that utilizes the Alternating Direction Method of Multipliers
 (ADMM) algorithm to solve a broad range of statistical optimization problems.
 Presently the models that `ADMM` has implemented include Lasso, Elastic Net,
-Dantzig Selector, Least Absolute Deviation and Basis Pursuit.
+Least Absolute Deviation and Basis Pursuit.
 
 ## Models
 
 ### Lasso
-```{r}
+```{r lasso}
 library(glmnet)
 library(ADMM)
 set.seed(123)
@@ -36,7 +41,7 @@ data.frame(glmnet = as.numeric(out_glmnet),
 ```
 
 ### Elastic Net
-```{r}
+```{r enet}
 fit <- glmnet(x, y, alpha = 0.5)
 out_glmnet <- coef(fit, s = exp(-2), exact = TRUE)
 out_admm <- admm_enet(x, y)$penalty(exp(-2), alpha = 0.5)$fit()
@@ -44,35 +49,21 @@ data.frame(glmnet = as.numeric(out_glmnet),
            admm = as.numeric(out_admm$beta))
 ```
 
-### Dantzig Selector
-```{r}
-library(flare)
-X <- scale(x)
-Y <- y - mean(y)
-
-out_flare <- slim(X, Y, nlambda = 20, lambda.min.ratio = 0.01, method = "dantzig")
-out_admm <- admm_dantzig(X, Y)$penalty(nlambda = 20, lambda_min_ratio = 0.01)$fit()
-
-range(out_flare$beta - out_admm$beta[-1, ])
-```
-
 ### Least Absolute Deviation
 Least Absolute Deviation (LAD) minimizes `||y - Xb||_1` instead of
 `||y - Xb||_2^2` (OLS), and is equivalent to median regression.
 
-```{r}
+```{r lad}
 library(quantreg)
-out_rq1 <- rq.fit(x, y)
-out_rq2 <- rq.fit(x, y, method = "fn")
+out_rq <- rq.fit(x, y)
 out_admm <- admm_lad(x, y, intercept = FALSE)$fit()
 
-data.frame(rq_br = out_rq1$coefficients,
-           rq_fn = out_rq2$coefficients,
+data.frame(rq_br = out_rq$coefficients,
            admm = out_admm$beta[-1])
 ```
 
 ### Basis Pursuit
-```{r}
+```{r bp}
 set.seed(123)
 n <- 50
 p <- 100
@@ -93,82 +84,66 @@ range(beta_true - out_admm$beta)
 ### Lasso and Elastic Net
 
 ```{r}
+library(microbenchmark)
 library(ADMM)
 library(glmnet)
 # compute the full solution path, n > p
 set.seed(123)
-n <- 20000
+n <- 10000
 p <- 1000
 m <- 100
 b <- matrix(c(runif(m), rep(0, p - m)))
 x <- matrix(rnorm(n * p, sd = 2), n, p)
 y <- x %*% b + rnorm(n)
 
-system.time(res1 <- glmnet(x, y, nlambda = 20))
-system.time(res2 <- admm_lasso(x, y)$penalty(res1$lambda)$fit())
-system.time(res3 <- admm_lasso(x, y)$penalty(res1$lambda)$parallel()$fit())
+lambdas1 = glmnet(x, y)$lambda
+lambdas2 = glmnet(x, y, alpha = 0.6)$lambda
 
-system.time(res4 <- glmnet(x, y, nlambda = 20, alpha = 0.6))
-system.time(res5 <- admm_enet(x, y)$penalty(res4$lambda, alpha = 0.6)$fit())
+microbenchmark(
+    "glmnet[lasso]" = {res1 <- glmnet(x, y)},
+    "admm[lasso]"   = {res2 <- admm_lasso(x, y)$penalty(lambdas1)$fit()},
+    "padmm[lasso]"  = {res3 <- admm_lasso(x, y)$penalty(lambdas1)$parallel()$fit()},
+    "glmnet[enet]"  = {res4 <- glmnet(x, y, alpha = 0.6)},
+    "admm[enet]"    = {res5 <- admm_enet(x, y)$penalty(lambdas2, alpha = 0.6)$fit()},
+    times = 5
+)
 
-res2$niter
-range(coef(res1) - res2$beta)
-res3$niter
-range(coef(res1) - res3$beta)
-
-res5$niter
-range(coef(res4) - res5$beta)
+# difference of results
+diffs = matrix(0, 3, 2)
+rownames(diffs) = c("glmnet-admm [lasso]", "glmnet-padmm[lasso]", "glmnet-admm [enet]")
+colnames(diffs) = c("min", "max")
+diffs[1, ] = range(coef(res1) - res2$beta)
+diffs[2, ] = range(coef(res1) - res3$beta)
+diffs[3, ] = range(coef(res4) - res5$beta)
+diffs
 
 # p > n
 set.seed(123)
-n <- 2000
-p <- 10000
+n <- 1000
+p <- 2000
 m <- 100
 b <- matrix(c(runif(m), rep(0, p - m)))
 x <- matrix(rnorm(n * p, sd = 2), n, p)
 y <- x %*% b + rnorm(n)
 
-system.time(res1 <- glmnet(x, y, nlambda = 20))
-system.time(res2 <- admm_lasso(x, y)$penalty(res1$lambda)$fit())
-system.time(res3 <- admm_lasso(x, y)$penalty(res1$lambda)$parallel()$fit())
+lambdas1 = glmnet(x, y)$lambda
+lambdas2 = glmnet(x, y, alpha = 0.6)$lambda
 
-system.time(res4 <- glmnet(x, y, nlambda = 20, alpha = 0.6))
-system.time(res5 <- admm_enet(x, y)$penalty(res4$lambda, alpha = 0.6)$fit())
+microbenchmark(
+    "glmnet[lasso]" = {res1 <- glmnet(x, y)},
+    "admm[lasso]"   = {res2 <- admm_lasso(x, y)$penalty(lambdas1)$fit()},
+    "padmm[lasso]"  = {res3 <- admm_lasso(x, y)$penalty(lambdas1)$parallel()$fit()},
+    "glmnet[enet]"  = {res4 <- glmnet(x, y, alpha = 0.6)},
+    "admm[enet]"    = {res5 <- admm_enet(x, y)$penalty(lambdas2, alpha = 0.6)$fit()},
+    times = 5
+)
 
-res2$niter
-range(coef(res1) - res2$beta)
-res3$niter
-range(coef(res1) - res3$beta)
-
-res5$niter
-range(coef(res4) - res5$beta)
+# difference of results
+diffs[1, ] = range(coef(res1) - res2$beta)
+diffs[2, ] = range(coef(res1) - res3$beta)
+diffs[3, ] = range(coef(res4) - res5$beta)
+diffs
 ```
-
-### Dantzig Selector
-
-```{r}
-library(ADMM)
-library(flare)
-# compute the full solution path, n > p
-set.seed(123)
-n <- 1000
-p <- 200
-m <- 10
-b <- matrix(c(runif(m), rep(0, p - m)))
-x <- matrix(rnorm(n * p, sd = 2), n, p)
-y <- x %*% b + rnorm(n)
-
-X <- scale(x)
-Y <- y - mean(y)
-
-system.time(res1 <- slim(X, Y, nlambda = 20, lambda.min.ratio = 0.01,
-                         method = "dantzig"))
-system.time(res2 <- admm_dantzig(X, Y)$penalty(nlambda = 20, lambda_min_ratio = 0.01)$
-                                      fit())
-
-range(res1$beta - res2$beta[-1, ])
-```
-
 
 ### LAD
 
@@ -183,11 +158,14 @@ b <- runif(p)
 x <- matrix(rnorm(n * p, sd = 2), n, p)
 y <- x %*% b + rnorm(n)
 
-system.time(res1 <- rq.fit(x, y))
-system.time(res2 <- rq.fit(x, y, method = "fn"))
-system.time(res3 <- admm_lad(x, y, intercept = FALSE)$fit())
+microbenchmark(
+    "quantreg[br]" = {res1 <- rq.fit(x, y)},
+    "quantreg[fn]" = {res2 <- rq.fit(x, y, method = "fn")},
+    "admm"         = {res3 <- admm_lad(x, y, intercept = FALSE)$fit()},
+    times = 5
+)
 
-range(res1$coefficients - res2$coefficients)
+# difference of results
 range(res1$coefficients - res3$beta[-1])
 
 set.seed(123)
@@ -197,9 +175,43 @@ b <- runif(p)
 x <- matrix(rnorm(n * p, sd = 2), n, p)
 y <- x %*% b + rnorm(n)
 
-system.time(res1 <- rq.fit(x, y, method = "fn"))
-system.time(res2 <- admm_lad(x, y, intercept = FALSE)$fit())
+microbenchmark(
+    "quantreg[fn]" = {res1 <- rq.fit(x, y, method = "fn")},
+    "admm"         = {res2 <- admm_lad(x, y, intercept = FALSE)$fit()},
+    times = 5
+)
 
+# difference of results
 range(res1$coefficients - res2$beta[-1])
 
 ```
+
+### Basis Pursuit
+
+```{r}
+set.seed(123)
+n <- 1000
+p <- 2000
+nsig <- 100
+beta_true <- c(runif(nsig), rep(0, p - nsig))
+beta_true <- sample(beta_true)
+x <- matrix(rnorm(n * p), n, p)
+y <- drop(x %*% beta_true)
+
+system.time(out_admm <- admm_bp(x, y)$fit())
+range(beta_true - out_admm$beta)
+
+
+set.seed(123)
+n <- 1000
+p <- 10000
+nsig <- 200
+beta_true <- c(runif(nsig), rep(0, p - nsig))
+beta_true <- sample(beta_true)
+x <- matrix(rnorm(n * p), n, p)
+y <- drop(x %*% beta_true)
+
+system.time(out_admm <- admm_bp(x, y)$fit())
+range(beta_true - out_admm$beta)
+```
+
