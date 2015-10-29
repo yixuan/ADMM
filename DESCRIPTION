@@ -11,5 +11,5 @@ Description: Solving statistical optimization problems using the
     Elastic Net, Dantzig Selector, Basis Pursuit, Least Absolute Deviation etc.
 License: GPL (>= 2)
 Depends: methods
-Imports: Rcpp (>= 0.11.0), Matrix, rARPACK, ggplot2
+Imports: Rcpp (>= 0.11.0), Matrix, ggplot2
 LinkingTo: Rcpp, RcppEigen
