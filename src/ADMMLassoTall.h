@@ -192,9 +192,8 @@ public:
 
         if(rho <= 0)
         {
-            MatOpSymLower<Scalar> op(XX);
-            Spectra::SymEigsSolver< Scalar, Spectra::LARGEST_ALGE, MatOpSymLower<Scalar> > eigs(&op, 1, 3);
-            srand(0);
+            Spectra::DenseSymMatProd<Scalar> op(XX);
+            Spectra::SymEigsSolver< Scalar, Spectra::LARGEST_ALGE, Spectra::DenseSymMatProd<Scalar> > eigs(&op, 1, 3);
             eigs.init();
             eigs.compute(10, 0.1);
             Vector evals = eigs.eigenvalues();
