@@ -38,7 +38,7 @@ private:
 
 public:
     PADMMLasso_Worker(ConstGenericMatrix &subA_, ConstGenericVector &subb_, SparseVector &aux_z_) :
-        PADMMBase_Worker(subA_, subb_, aux_z_),
+        PADMMBase_Worker< float, Eigen::VectorXf, Eigen::SparseVector<float> >(subA_, subb_, aux_z_),
         Ab(subA.transpose() * subb)
     {}
 
@@ -156,7 +156,8 @@ public:
                       int nthread_,
                       double eps_abs_ = 1e-6,
                       double eps_rel_ = 1e-6) :
-        PADMMBase_Master(datX_.cols(), nthread_, eps_abs_, eps_rel_),
+        PADMMBase_Master< float, Eigen::VectorXf, Eigen::SparseVector<float> >
+                          (datX_.cols(), nthread_, eps_abs_, eps_rel_),
         lambda0((datX_.transpose() * datY_).cwiseAbs().maxCoeff())
     {
         const int chunk_size = datX_.rows() / n_comp;
