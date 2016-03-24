@@ -173,7 +173,8 @@ public:
             double rho_ = 1.0,
             double eps_abs_ = 1e-6,
             double eps_rel_ = 1e-6) :
-        FADMMBase(datX_.rows(), datX_.rows(), datX_.rows(),
+        FADMMBase< Eigen::VectorXd, Eigen::SparseVector<double>, Eigen::VectorXd >
+                  (datX_.rows(), datX_.rows(), datX_.rows(),
                   eps_abs_, eps_rel_),
         datX(&datX_), datY(&datY_),
         ynorm(datY_.norm())
