@@ -7,13 +7,6 @@ namespace Linalg {
 
 extern "C"
 {
-    // Level 1
-    void daxpy_(const int *n, const double *alpha,
-                const double *dx, const int *incx,
-                double *dy, const int *incy);
-    void saxpy_(const int *n, const float *alpha,
-                const float *dx, const int *incx,
-                float *dy, const int *incy);
     // Level 2
     void dgemv_(const char* transA, const int* m, const int* n,
                 const double* alpha, const double* A, const int* ldA,
@@ -38,22 +31,6 @@ extern "C"
             	const int *m, const int *n, const double *alpha,
             	const double *a, const int *lda,
             	double *b, const int *ldb);
-}
-
-
-
-// Wrappers for Level 1
-
-// y = y + alpha * x
-inline void vec_add(double *dy, const double alpha, const double *dx, const int n)
-{
-    const int inc = 1;
-    daxpy_(&n, &alpha, dx, &inc, dy, &inc);
-}
-inline void vec_add(float *dy, const float alpha, const float *dx, const int n)
-{
-    const int inc = 1;
-    saxpy_(&n, &alpha, dx, &inc, dy, &inc);
 }
 
 
@@ -111,6 +88,13 @@ inline void cross_prod_lower(Eigen::MatrixXd &res, ConstGenericMatrix &X)
 }
 inline void cross_prod_lower(Eigen::MatrixXf &res, ConstGenericMatrixf &X)
 {
+#ifdef NO_FLOAT_BLAS
+    // If float BLAS is not supported, for example the BLAS shipped with R,
+    // use Eigen to do the computation.
+    const int p = X.cols();
+    res.resize(p, p);
+    res.triangularView<Eigen::Lower>() = X.transpose() * X;
+#else
     const float one = 1.0;
     const float zero = 0.0;
 
@@ -124,6 +108,7 @@ inline void cross_prod_lower(Eigen::MatrixXf &res, ConstGenericMatrixf &X)
     ssyrk_("L", "T", &p, &n,
            &one, x_ptr, &n,
            &zero, res_ptr, &p);
+#endif
 }
 
 // Calculating XX'
@@ -145,6 +130,13 @@ inline void tcross_prod_lower(Eigen::MatrixXd &res, ConstGenericMatrix &X)
 }
 inline void tcross_prod_lower(Eigen::MatrixXf &res, ConstGenericMatrixf &X)
 {
+#ifdef NO_FLOAT_BLAS
+    // If float BLAS is not supported, for example the BLAS shipped with R,
+    // use Eigen to do the computation.
+    const int n = X.rows();
+    res.resize(n, n);
+    res.triangularView<Eigen::Lower>() = X * X.transpose();
+#else
     const float one = 1.0;
     const float zero = 0.0;
 
@@ -158,6 +150,7 @@ inline void tcross_prod_lower(Eigen::MatrixXf &res, ConstGenericMatrixf &X)
     ssyrk_("L", "N", &n, &p,
            &one, x_ptr, &n,
            &zero, res_ptr, &n);
+#endif
 }
 
 

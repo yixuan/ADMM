@@ -21,7 +21,7 @@
 class ADMMLassoTall: public FADMMBase<Eigen::VectorXf, Eigen::SparseVector<float>, Eigen::VectorXf>
 {
 protected:
-    typedef float Scalar;
+    typedef float Scalar;  // Using float is much faster than double
     typedef Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> Matrix;
     typedef Eigen::Matrix<Scalar, Eigen::Dynamic, 1> Vector;
     typedef Eigen::Map<const Matrix> MapMat;
