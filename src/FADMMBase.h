@@ -4,6 +4,10 @@
 #include <RcppEigen.h>
 #include "Linalg/BlasWrapper.h"
 
+// Fast ADMM
+// Goldstein, Tom, et al. "Fast alternating direction optimization methods."
+// SIAM Journal on Imaging Sciences 7.3 (2014): 1588-1623.
+//
 // General problem setting
 //   minimize f(x) + g(z)
 //   s.t. Ax + Bz = c
@@ -203,9 +207,7 @@ public:
 
         resid_primal = newr.norm();
 
-        // dual_y.noalias() = adj_y + rho * newr;
-        std::copy(adj_y.data(), adj_y.data() + dim_dual, dual_y.data());
-        Linalg::vec_add(dual_y.data(), Yscalar(rho), newr.data(), dim_dual);
+        dual_y.noalias() = adj_y + rho * newr;
     }
 
     bool converged()

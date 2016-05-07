@@ -100,7 +100,7 @@ protected:
             rho /= 1.2;
             rho_changed_action();
         }
-        
+
         if(resid_dual < eps_dual)
         {
             rho *= 1.2;
@@ -180,8 +180,7 @@ public:
 
         resid_primal = newr.norm();
 
-        // dual_y.noalias() += rho * newr;
-        Linalg::vec_add(dual_y.data(), typename VecTypeY::RealScalar(rho), newr.data(), dim_dual);
+        dual_y.noalias() += rho * newr;
     }
 
     bool converged()

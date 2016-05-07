@@ -74,8 +74,7 @@ public:
 
         comp_squared_resid_primal = newr.squaredNorm();
 
-        // dual_y.noalias() += rho * newr;
-        Linalg::vec_add(dual_y.data(), Scalar(rho), newr.data(), dim_main);
+        dual_y.noalias() += rho * newr;
     }
 
     virtual double squared_x_norm() { return main_x.squaredNorm(); }
