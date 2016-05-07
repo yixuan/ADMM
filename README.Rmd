@@ -16,6 +16,35 @@ opts_chunk$set(message = FALSE)
 Presently the models that `ADMM` has implemented include Lasso, Elastic Net,
 Least Absolute Deviation and Basis Pursuit.
 
+## Installation
+
+`ADMM` package is still experimental, so it has not been submitted to CRAN yet.
+To install `ADMM`, you need a C++ compiler such as `g++` or `clang++`, and
+for Windows users, the
+[Rtools](https://cran.r-project.org/bin/windows/Rtools/index.html)
+software is needed (unless you can configure the toolchain by yourself).
+
+The installation follows the typical way of R packages on Github:
+
+```r
+library(devtools)
+install_github("yixuan/ADMM")
+```
+
+In order to achieve high performance computation, the package uses
+single precision floating point type (aka `float`) in some part of the code,
+which uses single precision BLAS functions such as `ssyrk()`. However,
+the BLAS library shipped with R does not contain such functions, so for
+code portability, a macro called `NO_FLOAT_BLAS` is defined in
+`src/Makevars` to use fallback Eigen implementation.
+
+If your R is linking to a high performance BLAS such as
+[OpenBLAS](http://www.openblas.net/), it is suggested to remove that macro in
+order to use the BLAS implementation. Moreover, the Eigen library that `ADMM`
+pakcage depends on benefits from modern CPU's vectorization support, so it is
+also recommended to define `-msse4` or `-mavx` in the `PKG_CXXFLAGS` variable
+(in file `src/Makevars`) whenever applicable.
+
 ## Models
 
 ### Lasso
@@ -214,4 +243,3 @@ y <- drop(x %*% beta_true)
 system.time(out_admm <- admm_bp(x, y)$fit())
 range(beta_true - out_admm$beta)
 ```
-

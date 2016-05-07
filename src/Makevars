@@ -1,2 +1,4 @@
+## Define NO_FLOAT_BLAS if R is linking to the vanilla BLAS, which does not
+## contain functions with float type
 PKG_CXXFLAGS = -DNO_FLOAT_BLAS $(SHLIB_OPENMP_CXXFLAGS)
 PKG_LIBS = $(SHLIB_OPENMP_CXXFLAGS) $(BLAS_LIBS)
