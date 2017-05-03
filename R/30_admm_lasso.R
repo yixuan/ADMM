@@ -8,6 +8,7 @@ ADMM_Lasso = setRefClass("ADMM_Lasso",
                   nlambda = "integer",
                   lambda_min_ratio = "numeric",
                   penalty_factor = "numeric",
+                  weight = "numeric",
                   nthread = "integer",
                   maxit = "integer",
                   eps_abs = "numeric",
@@ -30,11 +31,19 @@ ADMM_Lasso_fit = setRefClass("ADMM_Lasso_fit",
 
 ## Initialize fields including default values
 ADMM_Lasso$methods(
-    initialize = function(x, y, intercept = TRUE, standardize = TRUE, ...)
+    initialize = function(x, y, intercept = TRUE, standardize = TRUE, weights, ...)
     {
         if(nrow(x) != length(y))
             stop("nrow(x) should be equal to length(y)")
+        if(missing(weights))
+            .self$weight = rep(1, nrow(x))
+        else{
+            if(length(weights) != nrow(x))
+                stop("weight vector should be the same length as nrow(X)")
+            .self$weight = weights
+        }
 
+        
         .self$x = as.matrix(x)
         .self$y = as.numeric(y)
         .self$intercept = as.logical(intercept)
@@ -150,6 +159,7 @@ ADMM_Lasso$methods(
                   .self$nlambda, .self$lambda_min_ratio,
                   .self$penalty_factor,
                   .self$standardize, .self$intercept,
+                  .self$weight,
                   list(maxit = .self$maxit,
                        eps_abs = .self$eps_abs,
                        eps_rel = .self$eps_rel,
@@ -159,6 +169,7 @@ ADMM_Lasso$methods(
             .Call("admm_parlasso", .self$x, .self$y, .self$lambda,
                   .self$nlambda, .self$lambda_min_ratio,
                   .self$standardize, .self$intercept,
+                  .self$weight,
                   .self$nthread,
                   list(maxit = .self$maxit,
                        eps_abs = .self$eps_abs,

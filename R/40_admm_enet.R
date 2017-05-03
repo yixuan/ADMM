@@ -54,6 +54,7 @@ ADMM_Enet$methods(
                     .self$nlambda, .self$lambda_min_ratio,
                     .self$penalty_factor,
                     .self$standardize, .self$intercept,
+                    .self$weight,
                     .self$alpha,
                     list(maxit = .self$maxit,
                          eps_abs = .self$eps_abs,

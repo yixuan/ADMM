@@ -4,6 +4,7 @@
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
 using Eigen::ArrayXd;
+using Eigen::VectorXf;
 
 using Rcpp::wrap;
 using Rcpp::as;
@@ -19,10 +20,13 @@ BEGIN_RCPP
 
     MatrixXd datX(as<MatrixXd>(x_));
     VectorXd datY(as<VectorXd>(y_));
-
+    // Rcpp::NumericVector w(weight_);
+    
     int n = datX.rows();
     int p = datX.cols();
-
+    VectorXd weight(n);
+    weight.setOnes(n);
+    
     List opts(opts_);
     int maxit = as<int>(opts["maxit"]);
     double eps_abs = as<double>(opts["eps_abs"]);
@@ -32,7 +36,7 @@ BEGIN_RCPP
     bool intercept = as<bool>(intercept_);
 
     DataStd<double> datstd(n, p, true, intercept);
-    datstd.standardize(datX, datY);
+    datstd.standardize(datX, datY, weight);
 
     ADMMLAD solver(datX, datY, rho, eps_abs, eps_rel);
 

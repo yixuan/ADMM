@@ -36,7 +36,7 @@ private:
     Array  meanX;
     Array  scaleX;
 
-    static Scalar sd_n(ConstGenericVector &v)
+    static Scalar sd_n(ConstGenericVector &v, ConstGenericVector &w)
     {
 #ifdef __AVX__
         Scalar s, ss;
@@ -45,10 +45,12 @@ private:
         s /= vsize;
         return std::sqrt(ss / vsize - s * s);
 #else
-        Scalar mean = v.mean();
+        // Scalar mean = v.mean();
+        Scalar mean = v.dot(w);
         Vector v_centered = v.array() - mean;
-
-        return v_centered.norm() / std::sqrt(Scalar(v.size()));
+        Vector new_v = v_centered.array().square();
+        return std::sqrt(new_v.dot(w));
+       //  return v_centered.norm() / std::sqrt(Scalar(v.size()));
 #endif
     }
 
@@ -86,22 +88,28 @@ public:
             scaleX.resize(p);
     }
 
-    void standardize(Matrix &X, Vector &Y)
+    void standardize(Matrix &X, Vector &Y, Vector &W)
     {
-        Scalar n_invsqrt = 1.0 / std::sqrt(Scalar(n));
-
+        // Scalar n_invsqrt = 1.0 / std::sqrt(Scalar(n));
+        Vector new_Y, new_X;
+        W /= W.sum();
         // standardize Y
         switch(flag)
         {
             case 1:
-                scaleY = sd_n(Y);
+                scaleY = sd_n(Y, W);
                 Y.array() /= scaleY;
                 break;
             case 2:
             case 3:
-                meanY = Y.mean();
+                // meanY = Y.mean();
+                // Y.array() -= meanY;
+                // scaleY = Y.norm() * n_invsqrt;
+                // Y.array() /= scaleY;
+                meanY = Y.dot(W);
                 Y.array() -= meanY;
-                scaleY = Y.norm() * n_invsqrt;
+                new_Y = Y.array().square();
+                scaleY = std::sqrt(new_Y.dot(W));
                 Y.array() /= scaleY;
                 break;
             default:
@@ -114,14 +122,16 @@ public:
             case 1:
                 for(int i = 0; i < p; i++)
                 {
-                    scaleX[i] = sd_n(X.col(i));
+                    scaleX[i] = sd_n(X.col(i), W);
                     X.col(i).array() *= (1.0 / scaleX[i]);
                 }
                 break;
             case 2:
                 for(int i = 0; i < p; i++)
                 {
-                    meanX[i] = X.col(i).mean();
+                    // meanX[i] = X.col(i).mean();
+                    // X.col(i).array() -= meanX[i];
+                    meanX[i] = X.col(i).dot(W);
                     X.col(i).array() -= meanX[i];
                 }
                 break;
@@ -142,9 +152,12 @@ public:
     #else
                     Scalar *begin = &X(0, i);
                     Scalar *end = begin + n;
-                    meanX[i] = X.col(i).mean();
+                    // meanX[i] = X.col(i).mean();
+                    meanX[i] = X.col(i).dot(W);
                     std::transform(begin, end, begin, std::bind2nd(std::minus<Scalar>(), meanX[i]));
-                    scaleX[i] = X.col(i).norm() * n_invsqrt;
+                    new_X =  X.col(i).array().square();
+                    scaleX[i] = std::sqrt(new_X.dot(W));
+                    // scaleX[i] = X.col(i).norm() * n_invsqrt;
                     std::transform(begin, end, begin, std::bind2nd(std::multiplies<Scalar>(), 1.0 / scaleX[i]));
     #endif
                 }
