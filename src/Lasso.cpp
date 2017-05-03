@@ -31,6 +31,7 @@ inline void write_beta_matrix(SpMat &betas, int col, float beta0, SpVec &coef)
 
 RcppExport SEXP admm_lasso(SEXP x_, SEXP y_, SEXP lambda_,
                            SEXP nlambda_, SEXP lmin_ratio_,
+                           SEXP penalty_factor_,
                            SEXP standardize_, SEXP intercept_,
                            SEXP opts_)
 {
@@ -54,6 +55,8 @@ BEGIN_RCPP
     // which is equivalent to minimizing
     //   1/2 * ||y - X * beta||^2 + n * lambda * ||beta||_1
     ArrayXd lambda(as<ArrayXd>(lambda_));
+    ArrayXd penalty_factor(as<ArrayXd>(penalty_factor_));
+    
     int nlambda = lambda.size();
 
     List opts(opts_);
@@ -93,16 +96,18 @@ BEGIN_RCPP
 
     IntegerVector niter(nlambda);
     double ilambda = 0.0;
+    ArrayXd new_ilambda;
 
     for(int i = 0; i < nlambda; i++)
     {
         ilambda = lambda[i] * n / datstd.get_scaleY();
+        new_ilambda = ilambda * penalty_factor;
         if(n > p)
         {
             if(i == 0)
-                solver_tall->init(ilambda, rho);
+                solver_tall->init(new_ilambda, rho);
             else
-                solver_tall->init_warm(ilambda);
+                solver_tall->init_warm(new_ilambda);
 
             niter[i] = solver_tall->solve(maxit);
             SpVec res = solver_tall->get_z();

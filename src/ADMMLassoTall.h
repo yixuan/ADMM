@@ -30,13 +30,14 @@ protected:
     typedef const Eigen::Ref<const Vector> ConstGenericVector;
     typedef Eigen::SparseVector<Scalar> SparseVector;
     typedef Eigen::LLT<Matrix> LLT;
+    typedef Eigen::ArrayXd ArrayD;
 
     MapMat datX;                  // data matrix
     MapVec datY;                  // response vector
     Vector XY;                    // X'Y
     LLT solver;                   // matrix factorization
 
-    Scalar lambda;                // L1 penalty
+    ArrayD lambda;                // L1 penalty
     Scalar lambda0;               // minimum lambda to make coefficients all zero
 
 
@@ -52,7 +53,7 @@ protected:
 
 
 
-    static void soft_threshold(SparseVector &res, const Vector &vec, const double &penalty)
+    static void soft_threshold(SparseVector &res, const Vector &vec, const ArrayD &penalty)
     {
         int v_size = vec.size();
         res.setZero();
@@ -61,10 +62,10 @@ protected:
         const Scalar *ptr = vec.data();
         for(int i = 0; i < v_size; i++)
         {
-            if(ptr[i] > penalty)
-                res.insertBack(i) = ptr[i] - penalty;
-            else if(ptr[i] < -penalty)
-                res.insertBack(i) = ptr[i] + penalty;
+            if(ptr[i] > penalty[i])
+                res.insertBack(i) = ptr[i] - penalty[i];
+            else if(ptr[i] < -penalty[i])
+                res.insertBack(i) = ptr[i] + penalty[i];
         }
     }
     void next_x(Vector &res)
@@ -176,7 +177,7 @@ public:
     double get_lambda_zero() const { return lambda0; }
 
     // init() is a cold start for the first lambda
-    void init(double lambda_, double rho_)
+    void init(ArrayD lambda_, double rho_)
     {
         main_x.setZero();
         aux_z.setZero();
@@ -198,7 +199,7 @@ public:
             eigs.init();
             eigs.compute(10, 0.1);
             Vector evals = eigs.eigenvalues();
-            rho = std::pow(evals[0], 1.0 / 3) * std::pow(lambda, 2.0 / 3);
+            rho = std::pow(evals[0], 1.0 / 3) * std::pow(lambda[0], 2.0 / 3);
         }
 
         XX.diagonal().array() += rho;
@@ -216,7 +217,7 @@ public:
     }
     // when computing for the next lambda, we can use the
     // current main_x, aux_z, dual_y and rho as initial values
-    void init_warm(double lambda_)
+    void init_warm(ArrayD lambda_)
     {
         lambda = lambda_;
 

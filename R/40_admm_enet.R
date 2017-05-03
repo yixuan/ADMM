@@ -52,6 +52,7 @@ ADMM_Enet$methods(
     {
         res = .Call("admm_enet", .self$x, .self$y, .self$lambda,
                     .self$nlambda, .self$lambda_min_ratio,
+                    .self$penalty_factor,
                     .self$standardize, .self$intercept,
                     .self$alpha,
                     list(maxit = .self$maxit,

@@ -21,21 +21,21 @@ class ADMMEnetTall: public ADMMLassoTall
 private:
     Scalar alpha;
 
-    void enet(SparseVector &res, const Vector &vec, const double &penalty)
+    void enet(SparseVector &res, const Vector &vec, const ArrayD &penalty)
     {
         int v_size = vec.size();
         res.setZero();
         res.reserve(v_size);
 
-        const Scalar thresh = alpha * penalty;
-        const Scalar denom = 1.0 + penalty * (1.0 - alpha);
+        const ArrayD thresh = alpha * penalty;
+        const ArrayD denom = 1.0 + penalty * (1.0 - alpha);
         const Scalar *ptr = vec.data();
         for(int i = 0; i < v_size; i++)
         {
-            if(ptr[i] > thresh)
-                res.insertBack(i) = (ptr[i] - thresh) / denom;
-            else if(ptr[i] < -thresh)
-                res.insertBack(i) = (ptr[i] + thresh) / denom;
+            if(ptr[i] > thresh[i])
+                res.insertBack(i) = (ptr[i] - thresh[i]) / denom[i];
+            else if(ptr[i] < -thresh[i])
+                res.insertBack(i) = (ptr[i] + thresh[i]) / denom[i];
         }
     }
     void next_z(SparseVector &res)

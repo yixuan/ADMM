@@ -7,6 +7,7 @@ ADMM_Lasso = setRefClass("ADMM_Lasso",
                   lambda = "numeric",
                   nlambda = "integer",
                   lambda_min_ratio = "numeric",
+                  penalty_factor = "numeric",
                   nthread = "integer",
                   maxit = "integer",
                   eps_abs = "numeric",
@@ -41,6 +42,7 @@ ADMM_Lasso$methods(
         .self$lambda = numeric(0)
         .self$nlambda = 100L
         .self$lambda_min_ratio = ifelse(nrow(x) < ncol(x), 0.01, 0.0001)
+        .self$penalty_factor = rep(1, ncol(x))
         .self$nthread = 1L
         .self$maxit = 10000L
         .self$eps_abs = 1e-5
@@ -70,7 +72,8 @@ ADMM_Lasso$methods(
 
 ## Set up penalty parameters
 ADMM_Lasso$methods(
-    penalty = function(lambda = NULL, nlambda = 100, lambda_min_ratio, ...)
+    penalty = function(lambda = NULL, nlambda = 100, lambda_min_ratio, 
+                       penalty_factor = rep(1, ncol(.self$x)), ...)
     {
         lambda_val = sort(as.numeric(lambda), decreasing = TRUE)
         if(any(lambda_val <= 0))
@@ -87,9 +90,15 @@ ADMM_Lasso$methods(
         if(lmr_val >= 1 | lmr_val <= 0)
             stop("lambda_min_ratio must be within (0, 1)")
         
+        if(length(penalty_factor) < ncol(.self$x))
+            pf = as.numeric(c(penalty_factor, rep(1, ncol(.self$x) - length(penalty_factor))))
+        else
+            pf = as.numeric(penalty_factor[1:ncol(.self$x)])
+        
         .self$lambda = lambda_val
         .self$nlambda = as.integer(nlambda[1])
         .self$lambda_min_ratio = lmr_val
+        .self$penalty_factor = pf / sum(pf) * length(pf)
         
         invisible(.self)
     }
@@ -139,6 +148,7 @@ ADMM_Lasso$methods(
         res = if(.self$nthread <= 1)
             .Call("admm_lasso", .self$x, .self$y, .self$lambda,
                   .self$nlambda, .self$lambda_min_ratio,
+                  .self$penalty_factor,
                   .self$standardize, .self$intercept,
                   list(maxit = .self$maxit,
                        eps_abs = .self$eps_abs,
