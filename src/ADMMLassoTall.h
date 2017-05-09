@@ -24,13 +24,13 @@ protected:
     typedef float Scalar;  // Using float is much faster than double
     typedef Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic> Matrix;
     typedef Eigen::Matrix<Scalar, Eigen::Dynamic, 1> Vector;
+    typedef Eigen::ArrayXd ArrayD;
     typedef Eigen::Map<const Matrix> MapMat;
     typedef Eigen::Map<const Vector> MapVec;
     typedef const Eigen::Ref<const Matrix> ConstGenericMatrix;
     typedef const Eigen::Ref<const Vector> ConstGenericVector;
     typedef Eigen::SparseVector<Scalar> SparseVector;
     typedef Eigen::LLT<Matrix> LLT;
-    typedef Eigen::ArrayXd ArrayD;
 
     MapMat datX;                  // data matrix
     MapVec datY;                  // response vector
@@ -53,9 +53,9 @@ protected:
 
 
 
-    static void soft_threshold(SparseVector &res, const Vector &vec, const ArrayD &penalty)
+    static void soft_threshold(SparseVector& res, const Vector& vec, const ArrayD& penalty)
     {
-        int v_size = vec.size();
+        const int v_size = vec.size();
         res.setZero();
         res.reserve(v_size);
 
@@ -177,7 +177,7 @@ public:
     double get_lambda_zero() const { return lambda0; }
 
     // init() is a cold start for the first lambda
-    void init(ArrayD lambda_, double rho_)
+    void init(ArrayD& lambda_, double rho_)
     {
         main_x.setZero();
         aux_z.setZero();
@@ -186,7 +186,7 @@ public:
         adj_z.setZero();
         adj_y.setZero();
 
-        lambda = lambda_;
+        lambda.swap(lambda_);
         rho = rho_;
 
         Matrix XX;
@@ -217,9 +217,9 @@ public:
     }
     // when computing for the next lambda, we can use the
     // current main_x, aux_z, dual_y and rho as initial values
-    void init_warm(ArrayD lambda_)
+    void init_warm(ArrayD& lambda_)
     {
-        lambda = lambda_;
+        lambda.swap(lambda_);
 
         eps_primal = 0.0;
         eps_dual = 0.0;
