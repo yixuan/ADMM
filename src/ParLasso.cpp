@@ -41,17 +41,19 @@ BEGIN_RCPP
     Rcpp::NumericMatrix xx(x_);
     Rcpp::NumericVector yy(y_);
     Rcpp::NumericVector w(weight_);
-    
+
     const int n = xx.rows();
     const int p = xx.cols();
 
     MatrixXf datX(n, p);
     VectorXf datY(n);
-    VectorXf weight(n);
+    ArrayXf weight(n);
+
     // Copy data and convert type from double to float
     std::copy(xx.begin(), xx.end(), datX.data());
     std::copy(yy.begin(), yy.end(), datY.data());
     std::copy(w.begin(), w.end(), weight.data());
+
     // In glmnet, we minimize
     //   1/(2n) * ||y - X * beta||^2 + lambda * ||beta||_1
     // which is equivalent to minimizing

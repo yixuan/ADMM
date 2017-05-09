@@ -18,7 +18,7 @@ using Rcpp::IntegerVector;
 typedef Eigen::SparseVector<float> SpVec;
 typedef Eigen::SparseMatrix<float> SpMat;
 
-inline void write_beta_matrix(SpMat &betas, int col, float beta0, SpVec &coef)
+inline void write_beta_matrix(SpMat& betas, int col, float beta0, SpVec& coef)
 {
     betas.insert(0, col) = beta0;
 
@@ -40,24 +40,26 @@ BEGIN_RCPP
     Rcpp::NumericMatrix xx(x_);
     Rcpp::NumericVector yy(y_);
     Rcpp::NumericVector w(weight_);
-    
+
     const int n = xx.rows();
     const int p = xx.cols();
 
     MatrixXf datX(n, p);
     VectorXf datY(n);
-    VectorXf weight(n);
+    ArrayXf weight(n);
+
     // Copy data and convert type from double to float
     std::copy(xx.begin(), xx.end(), datX.data());
     std::copy(yy.begin(), yy.end(), datY.data());
     std::copy(w.begin(), w.end(), weight.data());
+
     // In glmnet, we minimize
     //   1/(2n) * ||y - X * beta||^2 + lambda * ||beta||_1
     // which is equivalent to minimizing
     //   1/2 * ||y - X * beta||^2 + n * lambda * ||beta||_1
     ArrayXd lambda(as<ArrayXd>(lambda_));
     ArrayXd penalty_factor(as<ArrayXd>(penalty_factor_));
-    
+
     int nlambda = lambda.size();
 
     List opts(opts_);
@@ -72,8 +74,8 @@ BEGIN_RCPP
     DataStd<float> datstd(n, p, standardize, intercept);
     datstd.standardize(datX, datY, weight);
 
-    ADMMEnetTall *solver_tall;
-    ADMMEnetWide *solver_wide;
+    ADMMEnetTall *solver_tall = NULL;
+    ADMMEnetWide *solver_wide = NULL;
 
     if(n > p)
         solver_tall = new ADMMEnetTall(datX, datY, alpha, eps_abs, eps_rel);
@@ -98,7 +100,7 @@ BEGIN_RCPP
 
     IntegerVector niter(nlambda);
     double ilambda = 0.0;
-    ArrayXd new_ilambda;
+    ArrayXd new_ilambda(penalty_factor.size());
 
     for(int i = 0; i < nlambda; i++)
     {

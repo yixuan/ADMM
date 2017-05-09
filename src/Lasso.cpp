@@ -19,7 +19,7 @@ using Rcpp::IntegerVector;
 typedef Eigen::SparseVector<float> SpVec;
 typedef Eigen::SparseMatrix<float> SpMat;
 
-inline void write_beta_matrix(SpMat &betas, int col, float beta0, SpVec &coef)
+inline void write_beta_matrix(SpMat& betas, int col, float beta0, SpVec& coef)
 {
     betas.insert(0, col) = beta0;
 
@@ -47,7 +47,7 @@ BEGIN_RCPP
 
     MatrixXf datX(n, p);
     VectorXf datY(n);
-    VectorXf weight(n);
+    ArrayXf  weight(n);
 
     // Copy data and convert type from double to float
     std::copy(xx.begin(), xx.end(), datX.data());
@@ -60,7 +60,7 @@ BEGIN_RCPP
     //   1/2 * ||y - X * beta||^2 + n * lambda * ||beta||_1
     ArrayXd lambda(as<ArrayXd>(lambda_));
     ArrayXd penalty_factor(as<ArrayXd>(penalty_factor_));
-    
+
     int nlambda = lambda.size();
 
     List opts(opts_);
@@ -74,8 +74,8 @@ BEGIN_RCPP
     DataStd<float> datstd(n, p, standardize, intercept);
     datstd.standardize(datX, datY, weight);
 
-    ADMMLassoTall *solver_tall;
-    ADMMLassoWide *solver_wide;
+    ADMMLassoTall* solver_tall = NULL;
+    ADMMLassoWide* solver_wide = NULL;
 
     if(n > p)
         solver_tall = new ADMMLassoTall(datX, datY, eps_abs, eps_rel);
@@ -100,7 +100,7 @@ BEGIN_RCPP
 
     IntegerVector niter(nlambda);
     double ilambda = 0.0;
-    ArrayXd new_ilambda;
+    ArrayXd new_ilambda(penalty_factor.size());
 
     for(int i = 0; i < nlambda; i++)
     {
