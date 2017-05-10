@@ -3,10 +3,6 @@
 
 #include <Eigen/Core>
 
-#ifdef __AVX__
-#include "Linalg/AVX.h"
-#endif
-
 template <typename Scalar = double>
 class DataStd
 {
@@ -36,27 +32,25 @@ private:
     Array  meanX;
     Array  scaleX;
 
-    static Scalar sd_n(ConstGenericVector &v, ConstGenericVector &w)
+    // Standard deviation using n as the denominator (population standard deviation)
+    static Scalar sd_n(ConstGenericVector& v)
     {
-#ifdef __AVX__
-        Scalar s, ss;
-        const int vsize = v.size();
-        get_ss_avx<Scalar>(v.data(), v.size(), s, ss);
-        s /= vsize;
-        return std::sqrt(ss / vsize - s * s);
-#else
-        // Scalar mean = v.mean();
-        Scalar mean = v.dot(w);
-        Vector v_centered = v.array() - mean;
-        Vector new_v = v_centered.array().square();
-        // Scalar bias = 1 / (1 - w.array().square().sum());
-        return std::sqrt(new_v.dot(w));
-       //  return v_centered.norm() / std::sqrt(Scalar(v.size()));
-#endif
+        const Scalar mean = v.mean();
+        const Scalar norm = (v.array() - mean).matrix().norm();
+        return norm / std::sqrt(Scalar(v.size()));
+    }
+
+    // Standard deviation with weights. The sum of w is assumed to be 1
+    // mean = sum w_i * x_i, variance = sum w_i * (x_i - mean)^2
+    static Scalar sd_n(ConstGenericVector& v, const Array& w)
+    {
+        const Scalar mean = v.dot(w.matrix());
+        const Scalar variance = ((v.array() - mean).square() * w).sum();
+        return std::sqrt(variance);
     }
 
     // spvec -> spvec / arr, elementwise
-    static void elementwise_quot(SparseVector &spvec, Array &arr)
+    static void elementwise_quot(SparseVector& spvec, const Array& arr)
     {
         for(typename SparseVector::InnerIterator iter(spvec); iter; ++iter)
         {
@@ -65,7 +59,7 @@ private:
     }
 
     // inner product of spvec and arr
-    static Scalar sparse_inner_product(SparseVector &spvec, Array &arr)
+    static Scalar sparse_inner_product(SparseVector& spvec, const Array& arr)
     {
         Scalar res = 0.0;
         for(typename SparseVector::InnerIterator iter(spvec); iter; ++iter)
@@ -89,13 +83,73 @@ public:
             scaleX.resize(p);
     }
 
-    void standardize(Matrix &X, Vector &Y, Vector &W)
+    // flag - 0: standardize = FALSE, intercept = FALSE
+    //             directly fit model
+    // flag - 1: standardize = TRUE, intercept = FALSE
+    //             scale x and y by their standard deviation
+    // flag - 2: standardize = FALSE, intercept = TRUE
+    //             center x, standardize y
+    // flag - 3: standardize = TRUE, intercept = TRUE
+    //             standardize x and y
+    void standardize(Matrix& X, Vector& Y)
     {
-        // Scalar n_invsqrt = 1.0 / std::sqrt(Scalar(n));
-        Vector new_Y, new_X;
+        const Scalar n_invsqrt = Scalar(1.0) / std::sqrt(Scalar(n));
+
+        // standardize Y
+        switch(flag)
+        {
+            case 1:
+                scaleY = sd_n(Y);
+                Y.array() /= scaleY;
+                break;
+            case 2:
+            case 3:
+                meanY = Y.mean();
+                Y.array() -= meanY;
+                scaleY = Y.norm() * n_invsqrt;
+                Y.array() /= scaleY;
+                break;
+            default:
+                break;
+        }
+
+        // standardize X
+        switch(flag)
+        {
+            case 1:
+                for(int i = 0; i < p; i++)
+                {
+                    scaleX[i] = sd_n(X.col(i));
+                    X.col(i).array() *= (Scalar(1.0) / scaleX[i]);
+                }
+                break;
+            case 2:
+                for(int i = 0; i < p; i++)
+                {
+                    meanX[i] = X.col(i).mean();
+                    X.col(i).array() -= meanX[i];
+                }
+                break;
+            case 3:
+                for(int i = 0; i < p; i++)
+                {
+                    meanX[i] = X.col(i).mean();
+                    X.col(i).array() -= meanX[i];
+                    scaleX[i] = X.col(i).norm() * n_invsqrt;
+                    X.col(i).array() *= (Scalar(1.0) / scaleX[i]);
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    // Standardize with weights
+    void standardize(Matrix& X, Vector& Y, Array& W)
+    {
+        // Make sure the weights sum up to 1
         W /= W.sum();
-        Vector sqrt_W = W.array().sqrt();
-        sqrt_W *= std::sqrt(W.size());
+        Array sqrt_W = W.sqrt() * std::sqrt(W.size());
         // standardize Y
         switch(flag)
         {
@@ -106,14 +160,9 @@ public:
                 break;
             case 2:
             case 3:
-                // meanY = Y.mean();
-                // Y.array() -= meanY;
-                // scaleY = Y.norm() * n_invsqrt;
-                // Y.array() /= scaleY;
-                meanY = Y.dot(W);
+                meanY = Y.dot(W.matrix());
                 Y.array() -= meanY;
-                new_Y = Y.array().square();
-                scaleY = std::sqrt(new_Y.dot(W));
+                scaleY = std::sqrt((Y.array().square() * W).sum());
                 Y.array() /= scaleY;
                 Y.array() *= sqrt_W.array();
                 break;
@@ -130,15 +179,12 @@ public:
                     scaleX[i] = sd_n(X.col(i), W);
                     X.col(i).array() *= (1.0 / scaleX[i]);
                     X.col(i).array() *=  sqrt_W.array();
-                    
                 }
                 break;
             case 2:
                 for(int i = 0; i < p; i++)
                 {
-                    // meanX[i] = X.col(i).mean();
-                    // X.col(i).array() -= meanX[i];
-                    meanX[i] = X.col(i).dot(W);
+                    meanX[i] = (X.col(i).array() * W).sum();
                     X.col(i).array() -= meanX[i];
                     X.col(i).array() *= sqrt_W.array();
                 }
@@ -146,29 +192,11 @@ public:
             case 3:
                 for(int i = 0; i < p; i++)
                 {
-                    /*meanX[i] = X.col(i).mean();
+                    meanX[i] = (X.col(i).array() * W).sum();
                     X.col(i).array() -= meanX[i];
-                    scaleX[i] = X.col(i).norm() * n_invsqrt;
-                    X.col(i).array() /= scaleX[i];*/
-    #ifdef __AVX__
-                    Scalar *begin = &X(0, i);
-                    Scalar s, ss;
-                    get_ss_avx<Scalar>(begin, n, s, ss);
-                    meanX[i] = s / n;
-                    scaleX[i] = std::sqrt(ss - s * s / n) * n_invsqrt;
-                    standardize_vec_avx<Scalar>(begin, n, meanX[i], 1.0 / scaleX[i]);
-    #else
-                    Scalar *begin = &X(0, i);
-                    Scalar *end = begin + n;
-                    // meanX[i] = X.col(i).mean();
-                    meanX[i] = X.col(i).dot(W);
-                    std::transform(begin, end, begin, std::bind2nd(std::minus<Scalar>(), meanX[i]));
-                    new_X =  X.col(i).array().square();
-                    scaleX[i] = std::sqrt(new_X.dot(W));
-                    // scaleX[i] = X.col(i).norm() * n_invsqrt;
-                    std::transform(begin, end, begin, std::bind2nd(std::multiplies<Scalar>(), 1.0 / scaleX[i]));
-                    X.col(i).array() *= sqrt_W.array();
-    #endif
+                    scaleX[i] = std::sqrt((X.col(i).array().square() * W).sum());
+                    X.col(i).array() *= (1.0 / scaleX[i]);
+                    X.col(i).array() *=  sqrt_W.array();
                 }
                 break;
             default:
@@ -176,20 +204,20 @@ public:
         }
     }
 
-    void recover(Scalar &beta0, ArrayRef coef)
+    void recover(Scalar& beta0, ArrayRef coef)
     {
         switch(flag)
         {
             case 0:
-                beta0 = 0;
+                beta0 = Scalar(0);
                 break;
             case 1:
-                beta0 = 0;
+                beta0 = Scalar(0);
                 coef /= scaleX;
                 coef *= scaleY;
                 break;
             case 2:
-                // problem for scaleY? case 2 
+                // problem for scaleY? case 2
                 coef *= scaleY;
                 beta0 = meanY - (coef * meanX).sum();
                 break;
@@ -203,7 +231,7 @@ public:
         }
     }
 
-    void recover(Scalar &beta0, SparseVector &coef)
+    void recover(Scalar& beta0, SparseVector& coef)
     {
         switch(flag)
         {

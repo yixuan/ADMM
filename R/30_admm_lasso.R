@@ -42,7 +42,7 @@ ADMM_Lasso$methods(
                 stop("weight vector should be the same length as nrow(X)")
             .self$weight = weights
         }
-        
+
         if(missing(penalty_factor))
             .self$penalty_factor = rep(1.0, ncol(x))
         else if(length(penalty_factor) < ncol(.self$x))
@@ -50,7 +50,7 @@ ADMM_Lasso$methods(
         else
             .self$penalty_factor = as.numeric(penalty_factor[1:ncol(.self$x)])
         .self$penalty_factor =  .self$penalty_factor / sum(.self$penalty_factor) * length(.self$penalty_factor)
-        
+
         .self$x = as.matrix(x)
         .self$y = as.numeric(y)
         .self$intercept = as.logical(intercept)
@@ -63,7 +63,7 @@ ADMM_Lasso$methods(
         .self$eps_abs = 1e-5
         .self$eps_rel = 1e-5
         .self$rho = -1.0
-        
+
 
     }
 )
@@ -74,7 +74,7 @@ ADMM_Lasso$methods(
     {
         cat(sprintf("$x: <%d x %d> matrix\n", nrow(.self$x), ncol(.self$x)))
         cat(sprintf("$y: <%d x 1> vector\n", length(.self$y)))
-        
+
         fields = setdiff(names(.refClassDef@fieldClasses), c("x", "y"))
         for(field in fields)
             cat("$", field, ": ", paste(.self$field(field), collapse = " "),
@@ -89,34 +89,34 @@ ADMM_Lasso$methods(
 
 ## Set up penalty parameters
 ADMM_Lasso$methods(
-    penalty = function(lambda = NULL, nlambda = 100, lambda_min_ratio, 
+    penalty = function(lambda = NULL, nlambda = 100, lambda_min_ratio,
                        penalty_factor = rep(1, ncol(.self$x)), ...)
     {
         lambda_val = sort(as.numeric(lambda), decreasing = TRUE)
         if(any(lambda_val <= 0))
             stop("lambda must be positive")
-        
+
         if(nlambda[1] <= 0)
             stop("nlambda must be a positive integer")
-        
+
         if(missing(lambda_min_ratio))
             lmr_val = ifelse(nrow(.self$x) < ncol(.self$x), 0.01, 0.0001)
         else
             lmr_val = as.numeric(lambda_min_ratio)
-        
+
         if(lmr_val >= 1 | lmr_val <= 0)
             stop("lambda_min_ratio must be within (0, 1)")
-        
+
         if(length(penalty_factor) < ncol(.self$x))
             pf = as.numeric(c(penalty_factor, rep(1, ncol(.self$x) - length(penalty_factor))))
         else
             pf = as.numeric(penalty_factor[1:ncol(.self$x)])
-        
+
         .self$lambda = lambda_val
         .self$nlambda = as.integer(nlambda[1])
         .self$lambda_min_ratio = lmr_val
         .self$penalty_factor = pf / sum(pf) * length(pf)
-        
+
         invisible(.self)
     }
 )
@@ -130,9 +130,9 @@ ADMM_Lasso$methods(
             nthread_val = 1L
         if(nthread_val >= ncol(.self$x) / 5)
             stop("nthread cannot exceed ncol(x)/5")
-        
+
         .self$nthread = nthread_val
-        
+
         invisible(.self)
     }
 )
@@ -148,12 +148,12 @@ ADMM_Lasso$methods(
             stop("eps_abs and eps_rel should be nonnegative")
         if(isTRUE(rho <= 0))
             stop("rho should be positive")
-        
+
         .self$maxit = as.integer(maxit)
         .self$eps_abs = as.numeric(eps_abs)
         .self$eps_rel = as.numeric(eps_rel)
         .self$rho = if(is.null(rho))  -1.0  else  as.numeric(rho)
-        
+
         invisible(.self)
     }
 )
@@ -222,7 +222,7 @@ ADMM_Lasso_fit$methods(
         # If we only have one lambda we cannot create a path plot
         if(nlambda < 2)
             stop("need to have at least two lambda values")
-        
+
         loglambda = log(.self$lambda)
         # Exclude variables that have zero coefficients for all lambdas
         rows_inc = apply(.self$beta, 1, function(x) any(x != 0))
@@ -245,22 +245,22 @@ ADMM_Lasso_fit$methods(
 
 
 #' Fitting A Lasso Model Using ADMM Algorithm
-#' 
+#'
 #' @description Lasso is a popular variable selection technique in high
 #' dimensional regression analysis, which tries to find the coefficient vector
 #' \eqn{\beta} that minimizes
 #' \deqn{\frac{1}{2n}\Vert y-X\beta\Vert_2^2+\lambda\Vert\beta\Vert_1}{
 #' 1/(2n) * ||y - X * \beta||_2^2 + \lambda * ||\beta||_1}
-#' 
+#'
 #' Here \eqn{n} is the sample size and \eqn{\lambda} is a regularization
 #' parameter that controls the sparseness of \eqn{\beta}.
-#' 
+#'
 #' This function will not directly conduct the computation,
 #' but rather returns an object of class "\code{ADMM_Lasso}" that contains
 #' several memeber functions to actually constructs and fits the model.
-#' 
+#'
 #' Member functions that are callable from this object are listed below:
-#' 
+#'
 #' \tabular{ll}{
 #'   \code{$penalty()}  \tab Specify the penalty parameter. See section
 #'                           \strong{Setting Penalty Parameter} for details.\cr
@@ -271,7 +271,7 @@ ADMM_Lasso_fit$methods(
 #'   \code{$fit()}      \tab Fit the model and do the actual computation.
 #'                           See section \strong{Model Fitting} for details.
 #' }
-#' 
+#'
 #' @param x The data matrix
 #' @param y The response vector
 #' @param intercept Whether to fit an intercept in the model. Default is \code{TRUE}.
@@ -281,10 +281,10 @@ ADMM_Lasso_fit$methods(
 #' @section Setting Penalty Parameter:
 #' The penalty parameter \eqn{\lambda} can be set through the member function
 #' \code{$penalty()}, with the usage and parameters given below:
-#' 
+#'
 #' \preformatted{    model$penalty(lambda = NULL, nlambda = 100, lambda_min_ratio, ...)
 #' }
-#' 
+#'
 #' \describe{
 #' \item{\code{lambda}}{A user provided sequence of \eqn{\lambda}. If set to
 #'                      \code{NULL}, the program will calculate its own sequence
@@ -307,40 +307,40 @@ ADMM_Lasso_fit$methods(
 #'                                value is the same as \pkg{glmnet}: 0.0001 if
 #'                                \code{nrow(x) >= ncol(x)} and 0.01 otherwise.}
 #' }
-#' 
+#'
 #' This member function will implicitly return the "\code{ADMM_Lasso}" object itself.
-#' 
+#'
 #' @section Parallel Computing:
 #' The Lasso model can be fitted with parallel computing by setting the number
 #' of threads in the \code{$parallel()} member function. The usage of this method
 #' is
-#' 
+#'
 #' \preformatted{    model$parallel(nthread = 2, ...)
 #' }
-#' 
+#'
 #' Here \code{model} is the object returned by \code{admm_lasso()}, and
 #' \code{nthread} is the number of threads to be used. \code{nthread} must be
 #' less than \code{ncol(x) / 5}.
-#' 
+#'
 #' \strong{NOTE:} Even in serial version of \code{admm_lasso()}, most matrix
 #' operations are implicitly parallelized when proper compiler options are
 #' turned on. Hence the parallel version of \code{admm_lasso()} is not
 #' necessarily faster than the serial one.
-#' 
+#'
 #' This member function will implicitly return the "\code{ADMM_Lasso}" object itself.
-#' 
+#'
 #' @section Additional Options:
 #' Additional options related to ADMM algorithm can be set through the
 #' \code{$opts()} member function of an "\code{ADMM_Lasso}" object. The usage of
 #' this method is
-#' 
+#'
 #' \preformatted{    model$opts(maxit = 10000, eps_abs = 1e-5, eps_rel = 1e-5,
 #'                rho = NULL)
 #' }
-#' 
+#'
 #' Here \code{model} is the object returned by \code{admm_lasso()}.
 #' Explanation of the arguments is given below:
-#' 
+#'
 #' \describe{
 #' \item{\code{maxit}}{Maximum number of iterations.}
 #' \item{\code{eps_abs}}{Absolute tolerance parameter.}
@@ -348,14 +348,14 @@ ADMM_Lasso_fit$methods(
 #' \item{\code{rho}}{ADMM step size parameter. If set to \code{NULL}, the program
 #'                   will compute a default one.}
 #' }
-#' 
+#'
 #' This member function will implicitly return the "\code{ADMM_Lasso}" object itself.
-#' 
+#'
 #' @section Model Fitting:
 #' Model will be fit after calling the \code{$fit()} member function. This is no
 #' argument that needs to be set. The function will return an object of class
 #' "\code{ADMM_Lasso_fit}", which contains the following fields:
-#' 
+#'
 #' \describe{
 #' \item{\code{lambda}}{The sequence of \eqn{\lambda} to build the solution path.}
 #' \item{\code{beta}}{A sparse matrix containing the estimated coefficient vectors,
@@ -363,44 +363,44 @@ ADMM_Lasso_fit$methods(
 #'                    first row.}
 #' \item{\code{niter}}{Number of ADMM iterations.}
 #' }
-#' 
+#'
 #' Class "\code{ADMM_Lasso_fit}" also contains a \code{$plot()} member function,
 #' which plots the coefficient paths with the sequence of \eqn{\lambda}.
 #' See the examples below.
-#' 
+#'
 #' @examples set.seed(123)
 #' n = 100
 #' p = 20
 #' b = runif(p)
 #' x = matrix(rnorm(n * p, mean = 1.2, sd = 2), n, p)
 #' y = 5 + c(x %*% b) + rnorm(n)
-#' 
+#'
 #' ## Directly fit the model
 #' admm_lasso(x, y)$fit()
-#' 
+#'
 #' ## Or, if you want to have more customization:
 #' model = admm_lasso(x, y)
 #' print(model)
-#' 
+#'
 #' ## Specify the lambda sequence
 #' model$penalty(nlambda = 20, lambda_min_ratio = 0.01)
-#' 
+#'
 #' ## Lower down precision for faster computation
 #' model$opts(maxit = 100, eps_rel = 0.001)
-#' 
+#'
 #' ## Use parallel computing (not necessary for this small dataset here)
 #' # model$parallel(nthread = 2)
-#' 
+#'
 #' ## Inspect the updated model setting
 #' print(model)
-#' 
+#'
 #' ## Fit the model and do the actual computation
 #' res = model$fit()
 #' res$beta
-#' 
+#'
 #' ## Create a solution path plot
 #' res$plot()
-#' 
+#'
 #' @author Yixuan Qiu <\url{http://statr.me}>
 #' @export
 admm_lasso = function(x, y, intercept = TRUE, standardize = TRUE, ...)
