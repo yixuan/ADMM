@@ -49,6 +49,7 @@ private:
         Scalar mean = v.dot(w);
         Vector v_centered = v.array() - mean;
         Vector new_v = v_centered.array().square();
+        // Scalar bias = 1 / (1 - w.array().square().sum());
         return std::sqrt(new_v.dot(w));
        //  return v_centered.norm() / std::sqrt(Scalar(v.size()));
 #endif
@@ -93,12 +94,15 @@ public:
         // Scalar n_invsqrt = 1.0 / std::sqrt(Scalar(n));
         Vector new_Y, new_X;
         W /= W.sum();
+        Vector sqrt_W = W.array().sqrt();
+        sqrt_W *= std::sqrt(W.size());
         // standardize Y
         switch(flag)
         {
             case 1:
                 scaleY = sd_n(Y, W);
                 Y.array() /= scaleY;
+                Y.array() *= sqrt_W.array();
                 break;
             case 2:
             case 3:
@@ -111,6 +115,7 @@ public:
                 new_Y = Y.array().square();
                 scaleY = std::sqrt(new_Y.dot(W));
                 Y.array() /= scaleY;
+                Y.array() *= sqrt_W.array();
                 break;
             default:
                 break;
@@ -124,6 +129,8 @@ public:
                 {
                     scaleX[i] = sd_n(X.col(i), W);
                     X.col(i).array() *= (1.0 / scaleX[i]);
+                    X.col(i).array() *=  sqrt_W.array();
+                    
                 }
                 break;
             case 2:
@@ -133,6 +140,7 @@ public:
                     // X.col(i).array() -= meanX[i];
                     meanX[i] = X.col(i).dot(W);
                     X.col(i).array() -= meanX[i];
+                    X.col(i).array() *= sqrt_W.array();
                 }
                 break;
             case 3:
@@ -159,6 +167,7 @@ public:
                     scaleX[i] = std::sqrt(new_X.dot(W));
                     // scaleX[i] = X.col(i).norm() * n_invsqrt;
                     std::transform(begin, end, begin, std::bind2nd(std::multiplies<Scalar>(), 1.0 / scaleX[i]));
+                    X.col(i).array() *= sqrt_W.array();
     #endif
                 }
                 break;
@@ -180,6 +189,7 @@ public:
                 coef *= scaleY;
                 break;
             case 2:
+                // problem for scaleY? case 2 
                 coef *= scaleY;
                 beta0 = meanY - (coef * meanX).sum();
                 break;

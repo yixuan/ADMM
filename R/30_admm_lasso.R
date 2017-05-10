@@ -31,18 +31,25 @@ ADMM_Lasso_fit = setRefClass("ADMM_Lasso_fit",
 
 ## Initialize fields including default values
 ADMM_Lasso$methods(
-    initialize = function(x, y, intercept = TRUE, standardize = TRUE, weights, ...)
+    initialize = function(x, y, intercept = TRUE, standardize = TRUE, weights, penalty_factor, ...)
     {
         if(nrow(x) != length(y))
             stop("nrow(x) should be equal to length(y)")
         if(missing(weights))
-            .self$weight = rep(1, nrow(x))
+            .self$weight = rep(1.0, nrow(x))
         else{
             if(length(weights) != nrow(x))
                 stop("weight vector should be the same length as nrow(X)")
             .self$weight = weights
         }
-
+        
+        if(missing(penalty_factor))
+            .self$penalty_factor = rep(1.0, ncol(x))
+        else if(length(penalty_factor) < ncol(.self$x))
+            .self$penalty_factor = as.numeric(c(penalty_factor, rep(1, ncol(.self$x) - length(penalty_factor))))
+        else
+            .self$penalty_factor = as.numeric(penalty_factor[1:ncol(.self$x)])
+        .self$penalty_factor =  .self$penalty_factor / sum(.self$penalty_factor) * length(.self$penalty_factor)
         
         .self$x = as.matrix(x)
         .self$y = as.numeric(y)
@@ -51,12 +58,13 @@ ADMM_Lasso$methods(
         .self$lambda = numeric(0)
         .self$nlambda = 100L
         .self$lambda_min_ratio = ifelse(nrow(x) < ncol(x), 0.01, 0.0001)
-        .self$penalty_factor = rep(1, ncol(x))
         .self$nthread = 1L
         .self$maxit = 10000L
         .self$eps_abs = 1e-5
         .self$eps_rel = 1e-5
         .self$rho = -1.0
+        
+
     }
 )
 
